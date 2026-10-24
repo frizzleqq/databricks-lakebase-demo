@@ -6,9 +6,7 @@ resources:
       comment: Delta source tables copied from samples.bakehouse, synced into Lakebase.
       properties:
         project: lakebase_demo
-      # Showcase grant: group_etl gets read access to the Delta-side schema
-      # (separate from the Postgres-side GRANT the app's SP needs -- see
-      # lakebase_app_dab/scripts/grant_app_access.py).
+      # Showcase grant: read access to the Delta-side schema.
       grants:
         - principal: group_etl
           privileges:

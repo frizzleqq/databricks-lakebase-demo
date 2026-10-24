@@ -1,12 +1,9 @@
 resources:
-  # The app's own read-write database, alongside the synced one in the same
-  # Lakebase project/branch (owned by ../lakebase_setup_dab). The app's SP gets
-  # CONNECT + CREATE here via apps.yml, creates its own schema on startup and so
-  # owns it -- no manual grant needed, unlike the synced schema.
+  # The app's own database, inside ../lakebase_setup_dab's project.
   postgres_databases:
     app_db:
       parent: projects/${var.lakebase_project_id}/branches/${var.lakebase_branch}
       database_id: app-db
       postgres_database: app_db
-      # Owner role declared by ../lakebase_setup_dab (postgres_roles.lakebase_owner).
+      # Declared in ../lakebase_setup_dab.
       role: projects/${var.lakebase_project_id}/branches/${var.lakebase_branch}/roles/lakebase-owner

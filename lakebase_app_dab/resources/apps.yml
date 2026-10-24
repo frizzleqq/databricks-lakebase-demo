@@ -2,11 +2,9 @@ resources:
   apps:
     bakehouse_viewer:
       name: bakehouse-lakebase-viewer
-      description: >-
-        Streamlit UI that reads the synced bakehouse tables out of Lakebase
-        Postgres (project ${var.lakebase_project_id}).
+      description: Reads synced bakehouse tables from Lakebase and writes comments to app_db.
       source_code_path: ../src/app
-      # Order matters: PG* env vars are only injected for the first database.
+      # Synced database must stay first: PG* env vars are only injected for it.
       resources:
         - name: postgres
           postgres:
@@ -18,7 +16,6 @@ resources:
             branch: projects/${var.lakebase_project_id}/branches/${var.lakebase_branch}
             database: ${resources.postgres_databases.app_db.id}
             permission: CAN_CONNECT_AND_CREATE
-      # Showcase grant: group_etl can open/use the deployed app.
       permissions:
         - group_name: group_etl
           level: CAN_USE

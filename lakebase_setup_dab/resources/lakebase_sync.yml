@@ -7,10 +7,7 @@ resources:
       custom_tags:
         - key: project
           value: lakebase_demo
-      # Showcase grant: group_etl can use the Lakebase project (workspace-level
-      # ACL, not a Postgres role -- that's the schema GRANT in schemas.yml /
-      # grant_app_access.py). CAN_USE/CAN_MANAGE are the only levels this
-      # resource type supports -- there's no read-only CAN_VIEW for it.
+      # Showcase grant (workspace ACL; only CAN_USE/CAN_MANAGE exist).
       permissions:
         - group_name: group_etl
           level: CAN_USE
@@ -30,36 +27,28 @@ resources:
       autoscaling_limit_max_cu: 0.5
       replace_existing: true
 
-  # An explicit owner role for the database. Without it the owner is the
-  # auto-created role of whoever first deployed the project, whose id is derived
-  # from their identity -- not portable across users.
+  # Explicit database owner, instead of the deployer's personal role.
   postgres_roles:
     lakebase_owner:
       parent: projects/${resources.postgres_projects.bakehouse_demo.project_id}/branches/${resources.postgres_branches.production_branch.branch_id}
       role_id: lakebase-owner
       postgres_role: lakebase_owner
 
-  # Declared explicitly so its resource id is stable and visible here --
-  # lakebase_app_dab references it by path (`.../databases/databricks-postgres`).
-  # Note the id is hyphenated while the Postgres name is underscored.
   postgres_databases:
     databricks_postgres:
       parent: projects/${resources.postgres_projects.bakehouse_demo.project_id}/branches/${resources.postgres_branches.production_branch.branch_id}
       database_id: databricks-postgres
-      # Must stay the default "databricks_postgres" — Lakehouse Sync (the reverse,
-      # Lakebase -> Delta CDC direction) only works for tables in this database.
+      # Must stay the default: Lakehouse Sync only supports this database.
       postgres_database: databricks_postgres
       role: ${resources.postgres_roles.lakebase_owner.id}
-      # The default database already exists on every branch; adopt it.
-      replace_existing: true
+      replace_existing: true  # adopt the branch's default database
 
   postgres_catalogs:
     bakehouse_catalog:
       catalog_id: ${var.lakebase_project_id}
       postgres_database: ${resources.postgres_databases.databricks_postgres.postgres_database}
       branch: projects/${resources.postgres_projects.bakehouse_demo.project_id}/branches/production
-      # No-op now that databricks_postgres is declared above, but changing this field
-      # forces a catalog recreate (which would take the synced tables with it).
+      # No-op, but changing it recreates the catalog and synced tables.
       create_database_if_missing: true
 
   postgres_synced_tables:

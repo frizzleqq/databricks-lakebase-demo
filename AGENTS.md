@@ -20,17 +20,15 @@ If the CLI is not installed, see: https://docs.databricks.com/dev-tools/cli/inst
 
 ## Layout
 
-This repo holds **two independent DAB bundles** as sibling directories, each
-with its own `databricks.yml`, `README.md`, and `AGENTS.md`:
+Two independent bundles share one Lakebase project. The architecture,
+workflow and gotchas are in [README.md](README.md).
 
-- [`lakebase_setup_dab/`](lakebase_setup_dab/AGENTS.md) — the Delta → Lakebase
-  sync infrastructure (and reverse-sync demo). Read its AGENTS.md before
-  touching Lakebase resources or jobs there.
-- [`lakebase_app_dab/`](lakebase_app_dab/AGENTS.md) — a Streamlit Databricks
-  App that reads `lakebase_setup_dab`'s synced tables. Depends on that bundle
-  being deployed and seeded first. Read its AGENTS.md before touching it.
+- [`lakebase_setup_dab/`](lakebase_setup_dab/AGENTS.md) holds the sync
+  infrastructure and owns the Lakebase project.
+- [`lakebase_app_dab/`](lakebase_app_dab/AGENTS.md) holds the Streamlit app
+  and its own `app_db` database.
 
-**Deploy each bundle from its own directory** — `cd lakebase_setup_dab` or
-`cd lakebase_app_dab` first. Never try to merge them into a single
-`bundle deploy`; each has its own bootstrap-ordering quirk (documented in
-its own AGENTS.md/README.md) and combining them compounds both.
+Read the bundle's AGENTS.md before changing anything in it. Deploy each bundle
+from its own directory, and never merge the two.
+
+Don't hardcode a CLI profile name in docs or commands. Use `<PROFILE>`.

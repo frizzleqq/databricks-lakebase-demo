@@ -1,223 +1,80 @@
-# databricks_lakebase
+# lakebase_setup_dab
 
-A reduced, teaching-oriented Databricks Asset Bundle (DAB) that shows how to sync
-Delta tables into Lakebase Autoscaling Postgres, and how the reverse direction
-(Lakebase -> Delta via CDC) works. Uses `samples.bakehouse` as sample data —
-this is a showcase, not a performance test.
+Syncs three `samples.bakehouse` tables from Delta into Lakebase Postgres, and
+sketches the reverse direction (Lakebase → Delta CDC). For the overall setup,
+first-deploy order and cleanup, see the [root README](../README.md).
 
-## What this bundle does
+## Data flow
 
-1. **Creates a Lakebase Autoscaling project** with a managed production branch and
-   primary read-write endpoint (0.5 CU — showcase sizing).
-2. **Binds the project's production branch as a Unity Catalog catalog** via `postgres_catalogs`.
-3. **Creates 3 synced tables** in the `sync_bakehouse` schema — two in `TRIGGERED`
-   (incremental, Change Data Feed) mode, one in `SNAPSHOT` mode.
-4. **Triggers refreshes** on demand via a Python job that calls the Lakeflow pipeline
-   backing each synced table.
-5. Documents the **reverse direction**: a plain Postgres table written to
-   directly, synced back into Delta as CDC history via Lakehouse Sync
-   (`databricks postgres create-cdf-config`) — blocked in this workspace by a
-   platform prerequisite, not automation. See [Reverse sync](#reverse-sync-lakebase--delta).
+`samples.bakehouse` is read-only, so Change Data Feed can't be enabled on it.
+The `seed_source_tables` job copies the tables into `lake_dev.sync_bakehouse`
+and enables CDF there; those copies are the sync sources.
 
-## Architecture
+| Table | Sync mode | Why |
+|---|---|---|
+| `sales_franchises` | `SNAPSHOT` (no CDF) | Small reference table — full copy each run |
+| `sales_customers` | `TRIGGERED` | Incremental sync via CDF |
+| `sales_transactions` | `TRIGGERED` | Pairs with `simulate_changes` to show new rows flowing through |
 
-```
-samples.bakehouse (read-only)              Our own schema (CDF-enabled copies)        Lakebase (PostgreSQL)
-──────────────────────────────             ────────────────────────────────────       ─────────────────────
-sales_franchises     ──(CTAS, seed job)──► lake_dev.sync_bakehouse.    ──────► <project>.sync_bakehouse.
-                                            sales_franchises  [no CDF]  SNAPSHOT        sales_franchises
+They land in `databricks_postgres.sync_bakehouse` in Lakebase, and are also
+browsable in UC under the `lakebase-bakehouse-demo` catalog.
 
-sales_customers      ──(CTAS, seed job)──► lake_dev.sync_bakehouse.    ──────► <project>.sync_bakehouse.
-                                            sales_customers   [CDF on]  TRIGGERED       sales_customers
-
-sales_transactions   ──(CTAS, seed job)──► lake_dev.sync_bakehouse.    ──────► <project>.sync_bakehouse.
-                                            sales_transactions [CDF on] TRIGGERED       sales_transactions
-```
-
-`samples.bakehouse` is a read-only system catalog, so we can't enable Change Data
-Feed on it directly (required for `TRIGGERED`/`CONTINUOUS` sync). The `seed_source_tables`
-job copies the 3 tables we care about into our own `sync_bakehouse` schema first,
-enables CDF on the two that sync incrementally, and those copies become the actual
-sync sources.
-
-Reverse direction (Lakebase -> Delta CDC), see [Reverse sync](#reverse-sync-lakebase--delta) below:
+## Layout
 
 ```
-Lakebase (app.franchise_notes, written to directly)  ──(create-cdf-config, blocked here)──►  <externally-backed catalog>.<schema>.lb_franchise_notes_history
-```
-
-## Project layout
-
-This is a monorepo with **two independent bundles** — each has its own
-`databricks.yml` and is deployed separately (`cd` into its directory first).
-They're kept independent deliberately: this root bundle already has a
-first-deploy ordering issue (see "Bootstrap ordering note" below), and the
-app has its own, smaller one (see `apps/bakehouse_viewer/README.md`) — mixing
-the two into one `bundle deploy` would compound them.
-
-```
-databricks.yml                       # bundle root — variables, targets
+databricks.yml               # variables, dev target
 resources/
-  schemas.yml                        # UC schema: sync_bakehouse
-  lakebase_sync.yml                  # Lakebase project/branch/endpoint/catalog + 3 synced tables
-  jobs.yml                           # seed_source_tables, simulate_changes, trigger_lakebase_sync
-src/
-  notebooks/
-    seed_source_tables.py            # CTAS copies from samples.bakehouse; enables CDF
-    simulate_changes.py              # inserts/updates rows so TRIGGERED sync has real CDF changes
-    trigger_lakebase_sync.py         # triggers a refresh on each synced table's pipeline
+  schemas.yml                # UC schema sync_bakehouse
+  lakebase_sync.yml          # project, branch, endpoint, owner role, database, catalog, synced tables
+  jobs.yml                   # seed_source_tables, simulate_changes, trigger_lakebase_sync
+src/notebooks/               # the three job notebooks
 scripts/
-  check_lakebase.py                  # connects to Postgres directly, prints row counts
-  setup_reverse_sync_demo.py         # creates the native franchise_notes table for the reverse demo
-apps/
-  bakehouse_viewer/                  # separate bundle — Streamlit app reading the synced tables
-    databricks.yml                   # its own bundle root, deploy with `cd apps/bakehouse_viewer`
-    README.md                        # its prerequisites + one-time SP grant step
+  check_lakebase.py          # prints row counts straight from Postgres
+  setup_reverse_sync_demo.py # creates app.franchise_notes for the reverse demo
 ```
 
 ## Variables
 
-| Variable | dev default | Description |
+| Variable | dev value | Description |
 |---|---|---|
-| `catalog` | `lake_dev` | UC catalog for the source Delta tables and pipeline checkpoint storage |
-| `schema` | `sync_bakehouse` | UC schema (and matching Postgres schema) for the synced tables |
-| `lakebase_project_id` | `lakebase-bakehouse-demo` | Lakebase project id (also the destination UC catalog name) |
+| `catalog` | `lake_dev` | UC catalog for the Delta sources and pipeline storage |
+| `schema` | `sync_bakehouse` | UC schema and matching Postgres schema |
+| `lakebase_project_id` | `lakebase-bakehouse-demo` | Lakebase project id, also the UC catalog name |
 
-Only a `dev` target exists — this is a single-environment showcase, not a dev/prod pipeline.
-
-## Prerequisites
-
-- Databricks CLI with support for `postgres_projects` / `postgres_branches` / `postgres_endpoints` / `postgres_catalogs` / `postgres_synced_tables` DAB resource types
-- `uv` installed (`uv sync --dev` for local dependencies)
-- Workspace: `https://dbc-ea4bb8e5-6935.cloud.databricks.com`
-- A Databricks CLI profile for that workspace. `<PROFILE>` in the commands
-  below is a placeholder for whatever you named it — check with
-  `databricks auth profiles`. OAuth (`databricks auth login`) is recommended;
-  some commands, e.g. `databricks apps logs`, don't work with a PAT profile.
-
-## Deployment
-
-```bash
-# Authenticate (once)
-databricks auth login --host https://dbc-ea4bb8e5-6935.cloud.databricks.com --profile <PROFILE>
-
-# Validate
-databricks bundle validate --profile <PROFILE>
-
-# Deploy
-databricks bundle deploy --profile <PROFILE>
-```
-
-> **Bootstrap ordering note:** `postgres_synced_tables` resources reference
-> `source_table_full_name`, which should exist for Terraform to create them cleanly.
-> On a brand-new deployment the source tables don't exist yet. If `bundle deploy`
-> reports a problem creating the synced tables, that's expected on the very first
-> deploy — run the seed job below, then deploy again:
->
-> ```bash
-> databricks bundle run seed_source_tables --profile <PROFILE>
-> databricks bundle deploy --profile <PROFILE>
-> ```
-
-Once deployed and seeded:
-
-```bash
-# Simulate some new/changed rows, then trigger an incremental refresh
-databricks bundle run simulate_changes --profile <PROFILE>
-databricks bundle run trigger_lakebase_sync --profile <PROFILE>
-
-# Check sync status
-databricks postgres get-synced-table "synced_tables/<project_id>.sync_bakehouse.sales_customers" --profile <PROFILE>
-```
-
-`bundle deploy` is idempotent — safe to re-run.
-
-## Querying the PostgreSQL database directly
-
-```python
-from databricks.sdk import WorkspaceClient
-import psycopg
-
-w = WorkspaceClient(profile="<PROFILE>")
-project_id = "lakebase-bakehouse-demo"
-branch = f"projects/{project_id}/branches/production"
-
-host = next(iter(w.postgres.list_endpoints(parent=branch))).status.hosts.host
-cred = w.postgres.generate_database_credential(endpoint=f"{branch}/endpoints/primary")
-
-conn = psycopg.connect(
-    host=host, port=5432, dbname="databricks_postgres",
-    user=w.current_user.me().user_name, password=cred.token, sslmode="require",
-)
-cur = conn.cursor()
-cur.execute("SELECT count(*) FROM sync_bakehouse.sales_customers")
-print(cur.fetchone())
-```
-
-See `scripts/check_lakebase.py` for a full example across all 3 tables:
+## Querying Postgres directly
 
 ```bash
 uv run python scripts/check_lakebase.py --profile <PROFILE> --project-id lakebase-bakehouse-demo
+# or, with psql installed:
+databricks psql --project lakebase-bakehouse-demo --profile <PROFILE>
 ```
-
-## Sync modes used here
-
-| Table | Mode | Why |
-|---|---|---|
-| `sales_franchises` | `SNAPSHOT` | Small reference table — full copy each run is simplest and cheap |
-| `sales_customers` | `TRIGGERED` | Demonstrates incremental sync via Change Data Feed |
-| `sales_transactions` | `TRIGGERED` | Fact-table-style data; pairs with `simulate_changes` to show new rows flowing through |
 
 ## Reverse sync (Lakebase → Delta)
 
-`databricks postgres create-cdf-config` streams Postgres changes into a Delta
-CDC table — a real CLI command, not UI-only. It can't target a *synced* table
-(read-only), so this demo uses one plain table, `app.franchise_notes`.
+`databricks postgres create-cdf-config` streams changes from Postgres tables
+into a Delta history table. It can't target synced tables, so the demo uses a
+plain table, `app.franchise_notes`, which must live in `databricks_postgres`.
 
 ```bash
 uv run python scripts/setup_reverse_sync_demo.py --profile <PROFILE> --project-id lakebase-bakehouse-demo
 
 databricks postgres create-cdf-config \
-  "projects/lakebase-bakehouse-demo/branches/production/databases/databricks-postgres" \
+  projects/lakebase-bakehouse-demo/branches/production/databases/databricks-postgres \
   <destination_catalog> <destination_schema> app \
   --cdf-config-id app_to_delta --profile <PROFILE>
 ```
 
 **Blocked in this workspace:** `Lakebase CDF is not supported for catalogs
-using Default Storage` — every catalog here uses default metastore storage,
-and this requires one backed by an external storage location (none exist).
-Needs real external storage set up first (storage credential + external
-location + a catalog on it); not something to provision inside this demo.
-Once available, it creates `<destination_catalog>.<destination_schema>.lb_franchise_notes_history`.
-
-**3. Query the history table:**
-
-Latest state of each row:
+using Default Storage`. It needs a catalog on an external storage location,
+and none exists here. Once set up, it creates
+`<destination_catalog>.<destination_schema>.lb_franchise_notes_history`:
 
 ```sql
-SELECT *
-FROM (
-  SELECT *,
-    ROW_NUMBER() OVER (PARTITION BY id ORDER BY _pg_lsn DESC) AS rn
-  FROM lake_dev.sync_bakehouse.lb_franchise_notes_history
+-- Latest state of each row
+SELECT * FROM (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY id ORDER BY _pg_lsn DESC) AS rn
+  FROM <destination_catalog>.<destination_schema>.lb_franchise_notes_history
   WHERE _pg_change_type IN ('insert', 'update_postimage', 'delete')
 )
 WHERE rn = 1 AND _pg_change_type != 'delete';
-```
-
-Full change history for a note:
-
-```sql
-SELECT *
-FROM lake_dev.sync_bakehouse.lb_franchise_notes_history
-WHERE id = 1
-ORDER BY _pg_lsn;
-```
-
-## Cleanup
-
-```bash
-databricks bundle destroy --profile <PROFILE>
-# Postgres projects have a 7-day soft-delete retention; to free the project id immediately:
-databricks postgres delete-project "projects/lakebase-bakehouse-demo" --purge --profile <PROFILE>
 ```
