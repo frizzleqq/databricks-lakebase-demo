@@ -1,0 +1,8 @@
+command:
+  - "streamlit"
+  - "run"
+  - "app.py"
+
+env:
+  - name: LAKEBASE_SCHEMA
+    value: "sync_bakehouse"

@@ -36,16 +36,3 @@ targets:
       catalog: lake_dev
       schema: sync_bakehouse
       lakebase_project_id: lakebase-bakehouse-demo
-  prod:
-    mode: production
-    workspace:
-      host: https://dbc-ea4bb8e5-6935.cloud.databricks.com
-      # We explicitly deploy to /Workspace/Users/florian.fr@protonmail.com to make sure we only have a single copy.
-      root_path: /Workspace/Users/florian.fr@protonmail.com/.bundle/${bundle.name}/${bundle.target}
-    variables:
-      catalog: lake_dev
-      schema: sync_bakehouse
-      lakebase_project_id: lakebase-bakehouse-prod
-    permissions:
-      - user_name: florian.fr@protonmail.com
-        level: CAN_MANAGE

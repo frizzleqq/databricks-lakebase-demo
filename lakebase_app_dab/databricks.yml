@@ -1,0 +1,30 @@
+bundle:
+  name: lakebase_bakehouse_viewer
+
+variables:
+  lakebase_project_id:
+    description: >-
+      Lakebase project id (from the sibling `lakebase_setup_dab` bundle) that
+      owns the synced tables this app reads. Must already be deployed and
+      seeded before this bundle is deployed.
+    default: lakebase-bakehouse-demo
+  lakebase_branch:
+    description: Branch within the Lakebase project to connect to.
+    default: production
+  lakebase_database:
+    description: >-
+      Database *resource id* within the branch — NOT necessarily the Postgres
+      database name (here it's hyphenated `databricks-postgres`, while the
+      actual Postgres db is `databricks_postgres`). Verify with
+      `databricks postgres list-databases projects/<id>/branches/<branch>`.
+    default: databricks-postgres
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://dbc-ea4bb8e5-6935.cloud.databricks.com

@@ -7,6 +7,13 @@ resources:
       custom_tags:
         - key: project
           value: lakebase_demo
+      # Showcase grant: group_etl can use the Lakebase project (workspace-level
+      # ACL, not a Postgres role -- that's the schema GRANT in schemas.yml /
+      # grant_app_access.py). CAN_USE/CAN_MANAGE are the only levels this
+      # resource type supports -- there's no read-only CAN_VIEW for it.
+      permissions:
+        - group_name: group_etl
+          level: CAN_USE
 
   postgres_branches:
     production_branch:

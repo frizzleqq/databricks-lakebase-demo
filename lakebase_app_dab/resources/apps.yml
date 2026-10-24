@@ -1,0 +1,18 @@
+resources:
+  apps:
+    bakehouse_viewer:
+      name: bakehouse-lakebase-viewer
+      description: >-
+        Streamlit UI that reads the synced bakehouse tables out of Lakebase
+        Postgres (project ${var.lakebase_project_id}).
+      source_code_path: ../src/app
+      resources:
+        - name: postgres
+          postgres:
+            branch: projects/${var.lakebase_project_id}/branches/${var.lakebase_branch}
+            database: projects/${var.lakebase_project_id}/branches/${var.lakebase_branch}/databases/${var.lakebase_database}
+            permission: CAN_CONNECT_AND_CREATE
+      # Showcase grant: group_etl can open/use the deployed app.
+      permissions:
+        - group_name: group_etl
+          level: CAN_USE
