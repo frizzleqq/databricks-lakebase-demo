@@ -1,0 +1,6 @@
+resources:
+  schemas:
+    sync_bakehouse:
+      catalog_name: ${var.catalog}
+      name: ${var.schema}
+      comment: Delta source tables copied from samples.bakehouse, synced into Lakebase.

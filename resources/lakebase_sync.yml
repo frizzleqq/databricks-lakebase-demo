@@ -1,0 +1,67 @@
+resources:
+  postgres_projects:
+    bakehouse_demo:
+      project_id: ${var.lakebase_project_id}
+      display_name: "Lakebase Bakehouse Sync Demo (${workspace.current_user.short_name})"
+      pg_version: 17
+
+  postgres_branches:
+    production_branch:
+      branch_id: production
+      parent: projects/${resources.postgres_projects.bakehouse_demo.project_id}
+      replace_existing: true
+
+  postgres_endpoints:
+    primary_endpoint:
+      endpoint_id: primary
+      parent: projects/${resources.postgres_projects.bakehouse_demo.project_id}/branches/${resources.postgres_branches.production_branch.branch_id}
+      endpoint_type: ENDPOINT_TYPE_READ_WRITE
+      autoscaling_limit_min_cu: 0.5
+      autoscaling_limit_max_cu: 0.5
+      replace_existing: true
+
+  postgres_catalogs:
+    bakehouse_catalog:
+      catalog_id: ${var.lakebase_project_id}
+      # Must stay the default "databricks_postgres" — Lakehouse Sync (the reverse,
+      # Lakebase -> Delta CDC direction) only works for tables in this database.
+      postgres_database: databricks_postgres
+      branch: projects/${resources.postgres_projects.bakehouse_demo.project_id}/branches/production
+      create_database_if_missing: true
+
+  postgres_synced_tables:
+    sales_franchises:
+      synced_table_id: ${resources.postgres_catalogs.bakehouse_catalog.catalog_id}.${var.schema}.sales_franchises
+      source_table_full_name: ${var.catalog}.${var.schema}.sales_franchises
+      branch: projects/${resources.postgres_projects.bakehouse_demo.project_id}/branches/production
+      postgres_database: databricks_postgres
+      primary_key_columns: [franchiseID]
+      scheduling_policy: SNAPSHOT
+      create_database_objects_if_missing: true
+      new_pipeline_spec:
+        storage_catalog: ${var.catalog}
+        storage_schema: ${workspace.current_user.short_name}
+
+    sales_customers:
+      synced_table_id: ${resources.postgres_catalogs.bakehouse_catalog.catalog_id}.${var.schema}.sales_customers
+      source_table_full_name: ${var.catalog}.${var.schema}.sales_customers
+      branch: projects/${resources.postgres_projects.bakehouse_demo.project_id}/branches/production
+      postgres_database: databricks_postgres
+      primary_key_columns: [customerID]
+      scheduling_policy: TRIGGERED
+      create_database_objects_if_missing: true
+      new_pipeline_spec:
+        storage_catalog: ${var.catalog}
+        storage_schema: ${workspace.current_user.short_name}
+
+    sales_transactions:
+      synced_table_id: ${resources.postgres_catalogs.bakehouse_catalog.catalog_id}.${var.schema}.sales_transactions
+      source_table_full_name: ${var.catalog}.${var.schema}.sales_transactions
+      branch: projects/${resources.postgres_projects.bakehouse_demo.project_id}/branches/production
+      postgres_database: databricks_postgres
+      primary_key_columns: [transactionID]
+      scheduling_policy: TRIGGERED
+      create_database_objects_if_missing: true
+      new_pipeline_spec:
+        storage_catalog: ${var.catalog}
+        storage_schema: ${workspace.current_user.short_name}

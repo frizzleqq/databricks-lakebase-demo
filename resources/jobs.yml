@@ -1,0 +1,58 @@
+resources:
+  jobs:
+    seed_source_tables:
+      name: delta_to_lakebase_seed_source_tables
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "4"
+            dependencies:
+              - databricks-sdk==0.106.0
+
+      tasks:
+        - task_key: seed_source_tables
+          environment_key: default
+          notebook_task:
+            notebook_path: ../src/notebooks/seed_source_tables.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+
+    simulate_changes:
+      name: delta_to_lakebase_simulate_changes
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "4"
+            dependencies:
+              - databricks-sdk==0.106.0
+
+      tasks:
+        - task_key: simulate_changes
+          environment_key: default
+          notebook_task:
+            notebook_path: ../src/notebooks/simulate_changes.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+
+    trigger_lakebase_sync:
+      name: delta_to_lakebase_trigger_sync
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "4"
+            dependencies:
+              - databricks-sdk==0.106.0
+
+      tasks:
+        - task_key: trigger_sync
+          environment_key: default
+          notebook_task:
+            notebook_path: ../src/notebooks/trigger_lakebase_sync.py
+            base_parameters:
+              lakebase_catalog: ${var.lakebase_project_id}
+              schema: ${var.schema}
