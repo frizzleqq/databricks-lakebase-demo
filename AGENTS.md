@@ -53,6 +53,8 @@ Key things to know:
   they're read-only in Postgres (SELECT / CREATE INDEX / DROP TABLE only), and
   Lakehouse Sync's `REPLICA IDENTITY FULL` requirement is not something to
   attempt against a sync-managed table.
-- Lakehouse Sync enablement itself is UI-only (no CLI/API) — never try to
-  automate or script around that; just point the user at the manual step in
-  README.md.
+- Lakehouse Sync is **not** UI-only — `databricks postgres create-cdf-config`
+  is a real CLI command. It's blocked here because no catalog in this
+  workspace has external storage (required); that's a platform prerequisite,
+  not a tooling gap, so don't retry with different names. See README.md's
+  "Reverse sync" section.

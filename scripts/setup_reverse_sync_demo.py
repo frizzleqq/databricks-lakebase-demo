@@ -5,12 +5,10 @@ synced table, which is read-only (SELECT / CREATE INDEX / DROP TABLE only) and
 not a safe target for the REPLICA IDENTITY change Lakehouse Sync requires.
 This table simulates rows an application would write straight into Lakebase.
 
-After running this script, enable Lakehouse Sync from the workspace UI
-(Catalog -> your project -> branch -> "Lakehouse Sync" tab -> Start Sync ->
-database "databricks_postgres" -> table "franchise_notes") -- that step has no
-CLI/API and must be done manually. See README.md for the full walkthrough and
-the queries to run against the resulting lb_franchise_notes_history Delta
-table.
+After running this script, enable Lakehouse Sync with
+`databricks postgres create-cdf-config` (a real CLI command, not UI-only).
+Currently blocked here -- no catalog in this workspace has external storage,
+which this requires. See README.md's "Reverse sync" section.
 
 Usage:
     uv run python scripts/setup_reverse_sync_demo.py --profile personal --project-id lakebase-bakehouse-<user>

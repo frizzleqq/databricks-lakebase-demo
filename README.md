@@ -14,9 +14,10 @@ this is a showcase, not a performance test.
    (incremental, Change Data Feed) mode, one in `SNAPSHOT` mode.
 4. **Triggers refreshes** on demand via a Python job that calls the Lakeflow pipeline
    backing each synced table.
-5. Documents (but doesn't automate — it's UI-only) the **reverse direction**: a plain
-   Postgres table written to directly, synced back into Delta as CDC history via
-   Lakehouse Sync.
+5. Documents the **reverse direction**: a plain Postgres table written to
+   directly, synced back into Delta as CDC history via Lakehouse Sync
+   (`databricks postgres create-cdf-config`) — blocked in this workspace by a
+   platform prerequisite, not automation. See [Reverse sync](#reverse-sync-lakebase--delta).
 
 ## Architecture
 
@@ -42,7 +43,7 @@ sync sources.
 Reverse direction (Lakebase -> Delta CDC), see [Reverse sync](#reverse-sync-lakebase--delta) below:
 
 ```
-Lakebase (app.franchise_notes, written to directly)  ──(Lakehouse Sync, UI-only)──►  lake_dev.sync_bakehouse.lb_franchise_notes_history
+Lakebase (app.franchise_notes, written to directly)  ──(create-cdf-config, blocked here)──►  <externally-backed catalog>.<schema>.lb_franchise_notes_history
 ```
 
 ## Project layout
@@ -152,30 +153,25 @@ uv run python scripts/check_lakebase.py --profile personal --project-id lakebase
 
 ## Reverse sync (Lakebase → Delta)
 
-Lakehouse Sync streams changes **from** a Lakebase Postgres table **into** a Unity
-Catalog Delta table (as full CDC/SCD-Type-2 history). It's a **native Lakebase
-feature with no CLI or API** — it can only be turned on from the workspace UI, so it
-isn't part of `databricks bundle deploy`.
-
-It also can't target one of our *synced* tables (`sales_customers`, etc.) — those are
-sync-managed and read-only in Postgres (only `SELECT`, `CREATE INDEX`, `DROP TABLE`
-are allowed there), and Lakehouse Sync requires `ALTER TABLE ... REPLICA IDENTITY FULL`
-on its source. So this demo uses one extra, plain Postgres table — `app.franchise_notes`
-— written to directly, the way an application would.
-
-**1. Create the table and set up replica identity:**
+`databricks postgres create-cdf-config` streams Postgres changes into a Delta
+CDC table — a real CLI command, not UI-only. It can't target a *synced* table
+(read-only), so this demo uses one plain table, `app.franchise_notes`.
 
 ```bash
 uv run python scripts/setup_reverse_sync_demo.py --profile personal --project-id lakebase-bakehouse-demo
+
+databricks postgres create-cdf-config \
+  "projects/lakebase-bakehouse-demo/branches/production/databases/databricks-postgres" \
+  <destination_catalog> <destination_schema> app \
+  --cdf-config-id app_to_delta --profile personal
 ```
 
-**2. Enable Lakehouse Sync from the UI** (one-time, manual):
-
-Catalog Explorer → your Lakebase project → `production` branch → **Lakehouse Sync** tab
-→ **Start Sync** → source database `databricks_postgres` → schema `app` → table
-`franchise_notes` → destination catalog/schema `lake_dev.sync_bakehouse`.
-
-This creates `lake_dev.sync_bakehouse.lb_franchise_notes_history` in Delta.
+**Blocked in this workspace:** `Lakebase CDF is not supported for catalogs
+using Default Storage` — every catalog here uses default metastore storage,
+and this requires one backed by an external storage location (none exist).
+Needs real external storage set up first (storage credential + external
+location + a catalog on it); not something to provision inside this demo.
+Once available, it creates `<destination_catalog>.<destination_schema>.lb_franchise_notes_history`.
 
 **3. Query the history table:**
 
