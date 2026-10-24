@@ -16,6 +16,14 @@ Key things to know:
 - This bundle has **no synced tables of its own** — it only reads ones
   created by `../lakebase_setup_dab`. Don't add `postgres_synced_tables`
   or `postgres_projects` resources here; that bundle owns the project.
+- The one Lakebase resource this bundle does own is its read-write database
+  `app_db` (`resources/app_db.yml`), created inside that same project/branch
+  and owned by the setup bundle's `lakebase-owner` role. The app's SP creates
+  and owns the `app` schema in it at startup, so it needs no grant. Never
+  create that schema under your own credentials (e.g. a local run) — the SP
+  would then hit `permission denied`.
+- `resources/apps.yml` attaches both databases; the synced one must stay
+  first, because `PG*` env vars are only injected for the first database.
 - The `postgres` app resource uses `CAN_CONNECT_AND_CREATE`, which does not
   grant access to the pre-existing `sync_bakehouse` schema — run
   `scripts/grant_app_access.py` once after first deploy (see README.md).

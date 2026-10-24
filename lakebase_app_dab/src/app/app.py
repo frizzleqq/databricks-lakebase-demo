@@ -7,23 +7,32 @@ from sqlalchemy import URL, Engine, create_engine, event, text
 
 SCHEMA = os.getenv("LAKEBASE_SCHEMA", "sync_bakehouse")
 TABLES = ["sales_franchises", "sales_customers", "sales_transactions"]
+# Both databases live on the same Lakebase endpoint; PGDATABASE is the synced
+# (read-only) one, APP_PGDATABASE the app's own read-write one.
+SYNC_DB = os.environ["PGDATABASE"]
+APP_DB = os.getenv("APP_PGDATABASE", "app_db")
 
 st.set_page_config(page_title="Bakehouse Lakebase Viewer", layout="wide")
 
 
 @st.cache_resource
-def get_engine() -> Engine:
+def get_workspace_client() -> WorkspaceClient:
+    return WorkspaceClient()
+
+
+@st.cache_resource
+def get_engine(database: str) -> Engine:
     # The `postgres` app resource auto-injects PGHOST/PGPORT/PGDATABASE/PGUSER/
     # PGSSLMODE -- no PGPASSWORD. The app's own OAuth token is the password;
     # it's only checked at login, so set it per new pooled connection.
-    w = WorkspaceClient()
+    w = get_workspace_client()
     engine = create_engine(
         URL.create(
             "postgresql+psycopg2",
             username=os.environ["PGUSER"],
             host=os.environ["PGHOST"],
             port=int(os.environ.get("PGPORT", "5432")),
-            database=os.environ["PGDATABASE"],
+            database=database,
         ),
         connect_args={"sslmode": os.environ.get("PGSSLMODE", "require")},
         pool_pre_ping=True,  # compute may have scaled to zero since last use
@@ -36,26 +45,116 @@ def get_engine() -> Engine:
     return engine
 
 
+@st.cache_resource
+def init_app_db() -> None:
+    # The app's SP has CONNECT + CREATE on APP_DB, so creating the schema here
+    # makes the SP its owner -- no manual grant needed.
+    with get_engine(APP_DB).begin() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS app"))
+        conn.execute(
+            text("""
+                CREATE TABLE IF NOT EXISTS app.comments (
+                    id BIGSERIAL PRIMARY KEY,
+                    subject_type TEXT NOT NULL CHECK (subject_type IN ('product', 'customer')),
+                    subject_id TEXT NOT NULL,
+                    subject_label TEXT NOT NULL,
+                    comment TEXT NOT NULL,
+                    author TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+            """)
+        )
+
+
 def load_table(table: str, limit: int) -> tuple[pd.DataFrame, int]:
-    with get_engine().connect() as conn:
+    with get_engine(SYNC_DB).connect() as conn:
         total = conn.execute(text(f"SELECT COUNT(*) FROM {SCHEMA}.{table}")).scalar_one()
         df = pd.read_sql(text(f"SELECT * FROM {SCHEMA}.{table} LIMIT :limit"), conn, params={"limit": limit})
     return df, total
 
 
+def load_subjects(subject_type: str) -> dict[str, str]:
+    """Options for the comment form as {subject_id: label}, read from the synced db."""
+    if subject_type == "product":
+        sql = f"SELECT DISTINCT product AS id, product AS label FROM {SCHEMA}.sales_transactions ORDER BY 1"
+    else:
+        sql = (
+            f'SELECT "customerID"::text AS id, first_name || \' \' || last_name || \' (#\' || "customerID" || \')\' AS label '
+            f'FROM {SCHEMA}.sales_customers ORDER BY last_name, first_name'
+        )
+    with get_engine(SYNC_DB).connect() as conn:
+        return {row.id: row.label for row in conn.execute(text(sql))}
+
+
+def add_comment(subject_type: str, subject_id: str, subject_label: str, comment: str, author: str | None) -> None:
+    with get_engine(APP_DB).begin() as conn:
+        conn.execute(
+            text("""
+                INSERT INTO app.comments (subject_type, subject_id, subject_label, comment, author)
+                VALUES (:subject_type, :subject_id, :subject_label, :comment, :author)
+            """),
+            {
+                "subject_type": subject_type,
+                "subject_id": subject_id,
+                "subject_label": subject_label,
+                "comment": comment,
+                "author": author,
+            },
+        )
+
+
+def load_comments() -> pd.DataFrame:
+    with get_engine(APP_DB).connect() as conn:
+        return pd.read_sql(
+            text("""
+                SELECT created_at, subject_type, subject_label, comment, author
+                FROM app.comments ORDER BY created_at DESC LIMIT 100
+            """),
+            conn,
+        )
+
+
 st.title("Bakehouse Lakebase Viewer")
-st.caption(f"Synced tables in schema `{SCHEMA}` — written by Lakehouse Sync, read-only here.")
+st.caption(
+    f"Reads synced tables from `{SYNC_DB}.{SCHEMA}` (written by Lakehouse Sync, read-only) "
+    f"and writes comments to its own database `{APP_DB}`."
+)
 
-table = st.selectbox("Synced table", TABLES)
-limit = st.slider("Rows to preview", 10, 500, 100)
+browse_tab, comments_tab = st.tabs(["Synced tables", "Comments"])
 
-try:
-    df, total = load_table(table, limit)
-    st.metric("Total rows", total)
-    st.dataframe(df, width="stretch")
-except Exception as exc:  # surfaced in the UI rather than a bare 500
-    st.error(f"Query failed: {exc}")
-    st.info(
-        "If this is `permission denied for schema`, the app's service "
-        "principal hasn't been granted access yet — see README.md."
-    )
+with browse_tab:
+    table = st.selectbox("Synced table", TABLES)
+    limit = st.slider("Rows to preview", 10, 500, 100)
+
+    try:
+        df, total = load_table(table, limit)
+        st.metric("Total rows", total)
+        st.dataframe(df, width="stretch")
+    except Exception as exc:  # surfaced in the UI rather than a bare 500
+        st.error(f"Query failed: {exc}")
+        st.info(
+            "If this is `permission denied for schema`, the app's service "
+            "principal hasn't been granted access yet — see README.md."
+        )
+
+with comments_tab:
+    try:
+        init_app_db()
+        subject_type = st.radio("Comment on a", ["product", "customer"], horizontal=True)
+        subjects = load_subjects(subject_type)
+        with st.form("add_comment", clear_on_submit=True):
+            subject_id = st.selectbox(subject_type.capitalize(), list(subjects), format_func=subjects.get)
+            comment = st.text_area("Comment")
+            if st.form_submit_button("Add comment"):
+                if comment.strip():
+                    # Set by the Databricks Apps proxy; absent when running locally.
+                    author = st.context.headers.get("X-Forwarded-Email")
+                    add_comment(subject_type, subject_id, subjects[subject_id], comment.strip(), author)
+                    st.success("Comment saved.")
+                else:
+                    st.warning("Comment is empty.")
+
+        st.subheader("Latest comments")
+        st.dataframe(load_comments(), width="stretch", hide_index=True)
+    except Exception as exc:
+        st.error(f"Comments unavailable: {exc}")

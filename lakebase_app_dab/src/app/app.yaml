@@ -6,3 +6,7 @@ command:
 env:
   - name: LAKEBASE_SCHEMA
     value: "sync_bakehouse"
+  # Same host/endpoint as PGDATABASE, just a different database
+  # (resources/app_db.yml postgres_database).
+  - name: APP_PGDATABASE
+    value: "app_db"
