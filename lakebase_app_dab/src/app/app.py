@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import psycopg2
 import streamlit as st
+from databricks.sdk import WorkspaceClient
 
 SCHEMA = os.getenv("LAKEBASE_SCHEMA", "sync_bakehouse")
 TABLES = ["sales_franchises", "sales_customers", "sales_transactions"]
@@ -11,23 +12,35 @@ st.set_page_config(page_title="Bakehouse Lakebase Viewer", layout="wide")
 
 
 @st.cache_resource
+def get_workspace_client() -> WorkspaceClient:
+    return WorkspaceClient()
+
+
 def get_connection():
+    # The `postgres` app resource only auto-injects PGHOST/PGPORT/PGDATABASE/
+    # PGUSER/PGSSLMODE + LAKEBASE_ENDPOINT -- no PGPASSWORD. Mint a short-lived
+    # OAuth token per connection instead (tokens expire, so don't cache this).
+    w = get_workspace_client()
+    token = w.postgres.generate_database_credential(endpoint=os.environ["LAKEBASE_ENDPOINT"]).token
     return psycopg2.connect(
         host=os.environ["PGHOST"],
         dbname=os.environ["PGDATABASE"],
         user=os.environ["PGUSER"],
-        password=os.environ["PGPASSWORD"],
+        password=token,
         port=os.environ.get("PGPORT", "5432"),
-        sslmode="require",
+        sslmode=os.environ.get("PGSSLMODE", "require"),
     )
 
 
 def load_table(table: str, limit: int) -> tuple[pd.DataFrame, int]:
     conn = get_connection()
-    with conn.cursor() as cur:
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.{table}")
-        total = cur.fetchone()[0]
-    df = pd.read_sql(f"SELECT * FROM {SCHEMA}.{table} LIMIT %s", conn, params=(limit,))
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.{table}")
+            total = cur.fetchone()[0]
+        df = pd.read_sql(f"SELECT * FROM {SCHEMA}.{table} LIMIT %s", conn, params=(limit,))
+    finally:
+        conn.close()
     return df, total
 
 

@@ -1,2 +1,3 @@
 psycopg2-binary
 pandas
+databricks-sdk>=0.81.0
