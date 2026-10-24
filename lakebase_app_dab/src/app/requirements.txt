@@ -1,3 +1,5 @@
+# Apps runtime pre-installs Streamlit 1.38, which lacks st.dataframe(width="stretch")
+streamlit>=1.50
 psycopg2-binary
 pandas
 databricks-sdk>=0.81.0

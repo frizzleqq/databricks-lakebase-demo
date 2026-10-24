@@ -18,8 +18,9 @@ def get_workspace_client() -> WorkspaceClient:
 
 def get_connection():
     # The `postgres` app resource only auto-injects PGHOST/PGPORT/PGDATABASE/
-    # PGUSER/PGSSLMODE + LAKEBASE_ENDPOINT -- no PGPASSWORD. Mint a short-lived
-    # OAuth token per connection instead (tokens expire, so don't cache this).
+    # PGUSER/PGSSLMODE -- no PGPASSWORD. LAKEBASE_ENDPOINT comes from
+    # `valueFrom: postgres` in app.yaml. Mint a short-lived OAuth token per
+    # connection instead (tokens expire, so don't cache this).
     w = get_workspace_client()
     token = w.postgres.generate_database_credential(endpoint=os.environ["LAKEBASE_ENDPOINT"]).token
     return psycopg2.connect(

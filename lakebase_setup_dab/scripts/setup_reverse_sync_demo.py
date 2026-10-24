@@ -11,7 +11,7 @@ Currently blocked here -- no catalog in this workspace has external storage,
 which this requires. See README.md's "Reverse sync" section.
 
 Usage:
-    uv run python scripts/setup_reverse_sync_demo.py --profile personal --project-id lakebase-bakehouse-<user>
+    uv run python scripts/setup_reverse_sync_demo.py --profile <PROFILE> --project-id lakebase-bakehouse-<user>
 """
 
 import argparse

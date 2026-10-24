@@ -21,6 +21,9 @@ bundle's bootstrap story stays simple and independently fixable.
    `sync_bakehouse.sales_franchises` / `sales_customers` / `sales_transactions`
    have rows in Postgres. See that project's README.
 2. Databricks CLI >= v0.294.0, authenticated (`databricks auth profiles`).
+   `<PROFILE>` in the commands below is a placeholder for whatever you named
+   your profile for this workspace. Prefer an OAuth profile
+   (`databricks auth login`) — `databricks apps logs` doesn't work with a PAT.
 3. `uv` not required here — this app has no local dev dependencies beyond
    what's declared in `src/app/requirements.txt` (installed by the Apps
    runtime on deploy).
@@ -41,14 +44,14 @@ and the grant (run as the Lakebase project owner, e.g. your own profile):
 
 ```bash
 # 1. Deploy once (the app resource + SP get created even though the query will fail)
-databricks bundle deploy --profile personal
-databricks bundle run bakehouse_viewer --profile personal
+databricks bundle deploy --profile <PROFILE>
+databricks bundle run bakehouse_viewer --profile <PROFILE>
 
 # 2. Grant the app's SP read access (run from ../lakebase_setup_dab — reuses
 #    its venv for databricks-sdk/psycopg rather than duplicating deps here)
 cd ../lakebase_setup_dab
 uv run python ../lakebase_app_dab/scripts/grant_app_access.py \
-  --profile personal --project-id lakebase-bakehouse-demo \
+  --profile <PROFILE> --project-id lakebase-bakehouse-demo \
   --app-name bakehouse-lakebase-viewer
 ```
 
@@ -59,10 +62,10 @@ deleted and recreated (it gets a new SP).
 ## Deployment
 
 ```bash
-databricks bundle validate --profile personal
-databricks bundle deploy --profile personal
-databricks bundle run bakehouse_viewer --profile personal   # starts the app
-databricks apps get bakehouse-lakebase-viewer --profile personal  # -> app URL
+databricks bundle validate --profile <PROFILE>
+databricks bundle deploy --profile <PROFILE>
+databricks bundle run bakehouse_viewer --profile <PROFILE>   # starts the app
+databricks apps get bakehouse-lakebase-viewer --profile <PROFILE>  # -> app URL
 ```
 
 > **Note on `resources/apps.yml`:** this was hand-written against the

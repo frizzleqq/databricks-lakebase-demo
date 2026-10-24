@@ -4,5 +4,9 @@ command:
   - "app.py"
 
 env:
+  # Not auto-injected like PGHOST etc. -- must be pulled from the `postgres`
+  # app resource explicitly. Resolves to the endpoint path used to mint tokens.
+  - name: LAKEBASE_ENDPOINT
+    valueFrom: postgres
   - name: LAKEBASE_SCHEMA
     value: "sync_bakehouse"

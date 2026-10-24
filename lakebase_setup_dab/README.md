@@ -89,19 +89,23 @@ Only a `dev` target exists — this is a single-environment showcase, not a dev/
 
 - Databricks CLI with support for `postgres_projects` / `postgres_branches` / `postgres_endpoints` / `postgres_catalogs` / `postgres_synced_tables` DAB resource types
 - `uv` installed (`uv sync --dev` for local dependencies)
-- Workspace: `https://dbc-ea4bb8e5-6935.cloud.databricks.com` (profile `personal`)
+- Workspace: `https://dbc-ea4bb8e5-6935.cloud.databricks.com`
+- A Databricks CLI profile for that workspace. `<PROFILE>` in the commands
+  below is a placeholder for whatever you named it — check with
+  `databricks auth profiles`. OAuth (`databricks auth login`) is recommended;
+  some commands, e.g. `databricks apps logs`, don't work with a PAT profile.
 
 ## Deployment
 
 ```bash
 # Authenticate (once)
-databricks configure --profile personal
+databricks auth login --host https://dbc-ea4bb8e5-6935.cloud.databricks.com --profile <PROFILE>
 
 # Validate
-databricks bundle validate --profile personal
+databricks bundle validate --profile <PROFILE>
 
 # Deploy
-databricks bundle deploy --profile personal
+databricks bundle deploy --profile <PROFILE>
 ```
 
 > **Bootstrap ordering note:** `postgres_synced_tables` resources reference
@@ -111,19 +115,19 @@ databricks bundle deploy --profile personal
 > deploy — run the seed job below, then deploy again:
 >
 > ```bash
-> databricks bundle run seed_source_tables --profile personal
-> databricks bundle deploy --profile personal
+> databricks bundle run seed_source_tables --profile <PROFILE>
+> databricks bundle deploy --profile <PROFILE>
 > ```
 
 Once deployed and seeded:
 
 ```bash
 # Simulate some new/changed rows, then trigger an incremental refresh
-databricks bundle run simulate_changes --profile personal
-databricks bundle run trigger_lakebase_sync --profile personal
+databricks bundle run simulate_changes --profile <PROFILE>
+databricks bundle run trigger_lakebase_sync --profile <PROFILE>
 
 # Check sync status
-databricks postgres get-synced-table "synced_tables/<project_id>.sync_bakehouse.sales_customers" --profile personal
+databricks postgres get-synced-table "synced_tables/<project_id>.sync_bakehouse.sales_customers" --profile <PROFILE>
 ```
 
 `bundle deploy` is idempotent — safe to re-run.
@@ -134,7 +138,7 @@ databricks postgres get-synced-table "synced_tables/<project_id>.sync_bakehouse.
 from databricks.sdk import WorkspaceClient
 import psycopg
 
-w = WorkspaceClient(profile="personal")
+w = WorkspaceClient(profile="<PROFILE>")
 project_id = "lakebase-bakehouse-demo"
 branch = f"projects/{project_id}/branches/production"
 
@@ -153,7 +157,7 @@ print(cur.fetchone())
 See `scripts/check_lakebase.py` for a full example across all 3 tables:
 
 ```bash
-uv run python scripts/check_lakebase.py --profile personal --project-id lakebase-bakehouse-demo
+uv run python scripts/check_lakebase.py --profile <PROFILE> --project-id lakebase-bakehouse-demo
 ```
 
 ## Sync modes used here
@@ -171,12 +175,12 @@ CDC table — a real CLI command, not UI-only. It can't target a *synced* table
 (read-only), so this demo uses one plain table, `app.franchise_notes`.
 
 ```bash
-uv run python scripts/setup_reverse_sync_demo.py --profile personal --project-id lakebase-bakehouse-demo
+uv run python scripts/setup_reverse_sync_demo.py --profile <PROFILE> --project-id lakebase-bakehouse-demo
 
 databricks postgres create-cdf-config \
   "projects/lakebase-bakehouse-demo/branches/production/databases/databricks-postgres" \
   <destination_catalog> <destination_schema> app \
-  --cdf-config-id app_to_delta --profile personal
+  --cdf-config-id app_to_delta --profile <PROFILE>
 ```
 
 **Blocked in this workspace:** `Lakebase CDF is not supported for catalogs
@@ -213,7 +217,7 @@ ORDER BY _pg_lsn;
 ## Cleanup
 
 ```bash
-databricks bundle destroy --profile personal
+databricks bundle destroy --profile <PROFILE>
 # Postgres projects have a 7-day soft-delete retention; to free the project id immediately:
-databricks postgres delete-project "projects/lakebase-bakehouse-demo" --purge --profile personal
+databricks postgres delete-project "projects/lakebase-bakehouse-demo" --purge --profile <PROFILE>
 ```

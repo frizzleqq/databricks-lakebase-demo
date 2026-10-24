@@ -1,7 +1,7 @@
 """Verify the Delta -> Lakebase sync by querying Postgres directly.
 
 Usage:
-    uv run python scripts/check_lakebase.py --profile personal --project-id lakebase-bakehouse-<user>
+    uv run python scripts/check_lakebase.py --profile <PROFILE> --project-id lakebase-bakehouse-<user>
 """
 
 import argparse

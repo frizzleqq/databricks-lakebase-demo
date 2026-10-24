@@ -10,7 +10,7 @@ Run from ../lakebase_setup_dab so it picks up that bundle's venv
 
     cd ../lakebase_setup_dab
     uv run python ../lakebase_app_dab/scripts/grant_app_access.py \
-        --profile personal --project-id lakebase-bakehouse-demo \
+        --profile <PROFILE> --project-id lakebase-bakehouse-demo \
         --app-name bakehouse-lakebase-viewer
 
 Must be run as a principal with GRANT privileges on the schema — e.g. the
