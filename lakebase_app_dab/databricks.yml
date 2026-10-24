@@ -15,8 +15,8 @@ variables:
     description: >-
       Database *resource id* within the branch — NOT necessarily the Postgres
       database name (here it's hyphenated `databricks-postgres`, while the
-      actual Postgres db is `databricks_postgres`). Verify with
-      `databricks postgres list-databases projects/<id>/branches/<branch>`.
+      actual Postgres db is `databricks_postgres`). Pinned by the
+      `postgres_databases.databricks_postgres` resource in ../lakebase_setup_dab.
     default: databricks-postgres
 
 include:

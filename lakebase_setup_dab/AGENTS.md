@@ -39,11 +39,17 @@ Key things to know:
   actual sync source, not `samples.bakehouse`.
 - Lakebase resources use the `postgres_*` DAB resource family
   (`postgres_projects`, `postgres_branches`, `postgres_endpoints`,
-  `postgres_catalogs`, `postgres_synced_tables`) in `resources/lakebase_sync.yml`.
+  `postgres_roles`, `postgres_databases`, `postgres_catalogs`,
+  `postgres_synced_tables`) in `resources/lakebase_sync.yml`.
   Do not use the deprecated `synced_database_tables` resource.
-- `postgres_catalogs.postgres_database` must stay `databricks_postgres` (the
-  default) — Lakehouse Sync (the reverse direction) only works for tables in
-  that database.
+- The database must stay `databricks_postgres` (the default) — Lakehouse Sync
+  (the reverse direction) only works for tables in that database. It's
+  adopted via `postgres_databases.databricks_postgres` (`replace_existing`) and owned
+  by the bundle's `lakebase-owner` role rather than the deployer's personal role.
+  `../lakebase_app_dab` references its resource id (`databricks-postgres`).
+- Don't drop `create_database_if_missing` from `postgres_catalogs` — it's a
+  no-op now, but changing it forces the catalog (and synced tables) to be
+  recreated.
 - First deploy on a clean workspace can fail creating the synced tables
   because the source tables don't exist yet — run
   `databricks bundle run seed_source_tables`, then `bundle deploy` again. See

@@ -1,9 +1,9 @@
 import os
 
 import pandas as pd
-import psycopg2
 import streamlit as st
 from databricks.sdk import WorkspaceClient
+from sqlalchemy import URL, Engine, create_engine, event, text
 
 SCHEMA = os.getenv("LAKEBASE_SCHEMA", "sync_bakehouse")
 TABLES = ["sales_franchises", "sales_customers", "sales_transactions"]
@@ -12,36 +12,34 @@ st.set_page_config(page_title="Bakehouse Lakebase Viewer", layout="wide")
 
 
 @st.cache_resource
-def get_workspace_client() -> WorkspaceClient:
-    return WorkspaceClient()
-
-
-def get_connection():
-    # The `postgres` app resource only auto-injects PGHOST/PGPORT/PGDATABASE/
-    # PGUSER/PGSSLMODE -- no PGPASSWORD. LAKEBASE_ENDPOINT comes from
-    # `valueFrom: postgres` in app.yaml. Mint a short-lived OAuth token per
-    # connection instead (tokens expire, so don't cache this).
-    w = get_workspace_client()
-    token = w.postgres.generate_database_credential(endpoint=os.environ["LAKEBASE_ENDPOINT"]).token
-    return psycopg2.connect(
-        host=os.environ["PGHOST"],
-        dbname=os.environ["PGDATABASE"],
-        user=os.environ["PGUSER"],
-        password=token,
-        port=os.environ.get("PGPORT", "5432"),
-        sslmode=os.environ.get("PGSSLMODE", "require"),
+def get_engine() -> Engine:
+    # The `postgres` app resource auto-injects PGHOST/PGPORT/PGDATABASE/PGUSER/
+    # PGSSLMODE -- no PGPASSWORD. The app's own OAuth token is the password;
+    # it's only checked at login, so set it per new pooled connection.
+    w = WorkspaceClient()
+    engine = create_engine(
+        URL.create(
+            "postgresql+psycopg2",
+            username=os.environ["PGUSER"],
+            host=os.environ["PGHOST"],
+            port=int(os.environ.get("PGPORT", "5432")),
+            database=os.environ["PGDATABASE"],
+        ),
+        connect_args={"sslmode": os.environ.get("PGSSLMODE", "require")},
+        pool_pre_ping=True,  # compute may have scaled to zero since last use
     )
+
+    @event.listens_for(engine, "do_connect")
+    def provide_token(dialect, conn_rec, cargs, cparams):
+        cparams["password"] = w.config.oauth_token().access_token
+
+    return engine
 
 
 def load_table(table: str, limit: int) -> tuple[pd.DataFrame, int]:
-    conn = get_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.{table}")
-            total = cur.fetchone()[0]
-        df = pd.read_sql(f"SELECT * FROM {SCHEMA}.{table} LIMIT %s", conn, params=(limit,))
-    finally:
-        conn.close()
+    with get_engine().connect() as conn:
+        total = conn.execute(text(f"SELECT COUNT(*) FROM {SCHEMA}.{table}")).scalar_one()
+        df = pd.read_sql(text(f"SELECT * FROM {SCHEMA}.{table} LIMIT :limit"), conn, params={"limit": limit})
     return df, total
 
 
