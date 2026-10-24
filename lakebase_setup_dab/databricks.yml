@@ -5,10 +5,6 @@ bundle:
 include:
   - resources/*.yml
 
-experimental:
-  # Keep "sync_bakehouse" unprefixed in dev mode; it must match the Postgres schema.
-  skip_name_prefix_for_schema: true
-
 variables:
   catalog:
     description: The UC catalog holding the Delta source tables (copied from samples.bakehouse)
@@ -18,11 +14,14 @@ variables:
     description: Lakebase Autoscaling project id for the sync_bakehouse demo
 
 targets:
-  dev:
-    mode: development
+  # Deliberately prod only: there is one Lakebase project, and environments are
+  # branches of it (see ../lakebase_app_dab's dev target).
+  prod:
+    mode: production
     default: true
     workspace:
       host: https://dbc-ea4bb8e5-6935.cloud.databricks.com
+      root_path: /Workspace/bundle/${bundle.name}/${bundle.target}
     variables:
       catalog: lake_dev
       schema: sync_bakehouse

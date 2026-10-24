@@ -1,20 +1,17 @@
-"""Grant the deployed app's service principal SELECT on the synced schema.
+"""Grant a deployed app's service principal access it can't get on its own.
 
-Each Databricks App gets its own auto-created service principal — its
-client id isn't known until the app resource exists, so this can't be
-baked into `bundle deploy` itself. Run this once after the app's first
-deploy (and again if the app is ever recreated).
+- SELECT on the synced schema in databricks_postgres (owned by the sync pipeline).
+- On a forked branch (e.g. dev): access to the `app` schema in app_db, which
+  the fork copied over still owned by the source branch's app (e.g. prod's).
 
-Run from ../lakebase_setup_dab so it picks up that bundle's venv
-(databricks-sdk, psycopg are declared in its pyproject.toml):
+Each app gets its own service principal, known only after deploy, so run this
+once per app/branch after its first deploy. Run from ../lakebase_setup_dab for
+its venv (databricks-sdk, psycopg), as the Lakebase project owner:
 
     cd ../lakebase_setup_dab
     uv run python ../lakebase_app_dab/scripts/grant_app_access.py \
         --profile <PROFILE> --project-id lakebase-bakehouse-demo \
-        --app-name bakehouse-lakebase-viewer
-
-Must be run as a principal with GRANT privileges on the schema — e.g. the
-Lakebase project owner (default for whoever created the project).
+        --app-name <APP_NAME> [--branch <BRANCH>]
 """
 
 import argparse
@@ -23,6 +20,8 @@ import psycopg
 from databricks.sdk import WorkspaceClient
 
 SCHEMA = "sync_bakehouse"
+APP_DB = "app_db"
+APP_SCHEMA = "app"
 
 
 def main() -> None:
@@ -38,10 +37,7 @@ def main() -> None:
     app = w.apps.get(name=args.app_name)
     client_id = app.service_principal_client_id
     if not client_id:
-        raise SystemExit(
-            f"App {args.app_name!r} has no service_principal_client_id yet — "
-            "deploy it first (`databricks bundle deploy` from apps/bakehouse_viewer)."
-        )
+        raise SystemExit(f"App {args.app_name!r} has no service_principal_client_id yet — deploy it first.")
 
     branch = f"projects/{args.project_id}/branches/{args.branch}"
     endpoint = f"{branch}/endpoints/primary"
@@ -49,21 +45,25 @@ def main() -> None:
     user = w.current_user.me().user_name
     cred = w.postgres.generate_database_credential(endpoint=endpoint)
 
-    conn = psycopg.connect(
-        host=host,
-        port=5432,
-        dbname="databricks_postgres",
-        user=user,
-        password=cred.token,
-        sslmode="require",
-    )
+    def connect(dbname: str) -> psycopg.Connection:
+        return psycopg.connect(host=host, port=5432, dbname=dbname, user=user, password=cred.token, sslmode="require")
 
-    with conn, conn.cursor() as cur:
+    with connect("databricks_postgres") as conn, conn.cursor() as cur:
         cur.execute(f'GRANT USAGE ON SCHEMA {SCHEMA} TO "{client_id}"')
         cur.execute(f'GRANT SELECT ON ALL TABLES IN SCHEMA {SCHEMA} TO "{client_id}"')
         cur.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {SCHEMA} GRANT SELECT ON TABLES TO "{client_id}"')
-
     print(f"Granted SELECT on {SCHEMA}.* to app SP {client_id} ({args.app_name})")
+
+    with connect(APP_DB) as conn, conn.cursor() as cur:
+        cur.execute("SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = %s", (APP_SCHEMA,))
+        row = cur.fetchone()
+        if row is None or row[0] == client_id:
+            return  # app creates (or already owns) the schema itself
+        cur.execute(f'GRANT USAGE, CREATE ON SCHEMA {APP_SCHEMA} TO "{client_id}"')
+        # No sequence grant: the project owner can't grant on sequences owned by
+        # another role, which is why app.comments uses an IDENTITY id.
+        cur.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA {APP_SCHEMA} TO "{client_id}"')
+    print(f"Granted access to {APP_DB}.{APP_SCHEMA} (owned by {row[0]}) to app SP {client_id}")
 
 
 if __name__ == "__main__":

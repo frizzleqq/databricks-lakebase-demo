@@ -2,12 +2,15 @@ bundle:
   name: lakebase_bakehouse_viewer
 
 variables:
+  app_name:
+    description: App name (workspace-global, max 30 chars).
+    default: bakehouse-viewer-${workspace.current_user.domain_friendly_name}
   lakebase_project_id:
     description: Lakebase project id from ../lakebase_setup_dab.
     default: lakebase-bakehouse-demo
   lakebase_branch:
-    description: Lakebase branch.
-    default: production
+    description: Lakebase branch the app runs against.
+    default: dev-${workspace.current_user.domain_friendly_name}
   lakebase_database:
     description: Resource id of the synced database (Postgres name databricks_postgres).
     default: databricks-postgres
@@ -16,8 +19,36 @@ include:
   - resources/*.yml
 
 targets:
+  # Per-developer branch forked from production: copies of the synced tables and prod's app_db.
   dev:
     mode: development
     default: true
     workspace:
       host: https://dbc-ea4bb8e5-6935.cloud.databricks.com
+    resources:
+      postgres_branches:
+        dev_branch:
+          parent: projects/${var.lakebase_project_id}
+          branch_id: ${var.lakebase_branch}
+          source_branch: projects/${var.lakebase_project_id}/branches/production
+          ttl: 86400s # 1 day; the next deploy after expiry forks a fresh copy
+      postgres_endpoints:
+        dev_endpoint:
+          parent: ${resources.postgres_branches.dev_branch.id}
+          endpoint_id: primary
+          endpoint_type: ENDPOINT_TYPE_READ_WRITE
+          autoscaling_limit_min_cu: 0.5 # auto-created at 1 CU otherwise
+          autoscaling_limit_max_cu: 0.5
+          replace_existing: true
+      postgres_databases:
+        app_db:
+          parent: ${resources.postgres_branches.dev_branch.id} # create the branch first
+
+  prod:
+    mode: production
+    workspace:
+      host: https://dbc-ea4bb8e5-6935.cloud.databricks.com
+      root_path: /Workspace/bundle/${bundle.name}/${bundle.target}
+    variables:
+      app_name: bakehouse-lakebase-viewer
+      lakebase_branch: production

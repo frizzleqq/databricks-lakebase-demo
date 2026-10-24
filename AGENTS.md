@@ -20,8 +20,8 @@ If the CLI is not installed, see: https://docs.databricks.com/dev-tools/cli/inst
 
 ## Layout
 
-Two independent bundles share one Lakebase project. The architecture,
-workflow and gotchas are in [README.md](README.md).
+Two independent bundles share one Lakebase project. The architecture and
+workflow are in [README.md](README.md).
 
 - [`lakebase_setup_dab/`](lakebase_setup_dab/AGENTS.md) holds the sync
   infrastructure and owns the Lakebase project.

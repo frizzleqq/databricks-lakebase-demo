@@ -1,7 +1,7 @@
 resources:
   apps:
     bakehouse_viewer:
-      name: bakehouse-lakebase-viewer
+      name: ${var.app_name}
       description: Reads synced bakehouse tables from Lakebase and writes comments to app_db.
       source_code_path: ../src/app
       # Synced database must stay first: PG* env vars are only injected for it.

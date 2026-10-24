@@ -7,45 +7,58 @@ to a separate database in the same Lakebase project. Sample data comes from
 
 ## Architecture
 
-```
-Unity Catalog (lake_dev.sync_bakehouse)          Lakebase project: lakebase-bakehouse-demo / branch: production
-───────────────────────────────────────          ──────────────────────────────────────────────────────────────
-sales_franchises    ──SNAPSHOT──►  db databricks_postgres                     db app_db
-sales_customers     ──TRIGGERED─►    schema sync_bakehouse (synced, RO)         schema app (owned by the app)
-sales_transactions  ──TRIGGERED─►      3 tables                ──read──┐          comments  ◄──write──┐
-                                                                       └──── Databricks App ──────────┘
-                                                                          bakehouse-lakebase-viewer
+```mermaid
+flowchart LR
+  src["Delta tables<br/>lake_dev.sync_bakehouse"]
+
+  subgraph lakebase["Lakebase project: lakebase-bakehouse-demo"]
+    subgraph production["branch: production"]
+      synced[("databricks_postgres<br/>sync_bakehouse.* (read-only)")]
+      appdb[("app_db<br/>app.comments")]
+    end
+    subgraph dev["branch: dev-&lt;user&gt; (fork, 1-day TTL)"]
+      devdbs[("copies of both databases")]
+    end
+  end
+
+  app["App<br/>bakehouse-lakebase-viewer"]
+  devapp["App<br/>bakehouse-viewer-&lt;user&gt;"]
+
+  src -- "synced tables" --> synced
+  synced -- read --> app
+  app -- write --> appdb
+  production -. fork .-> dev
+  devdbs <--> devapp
 ```
 
-Two independent bundles, each deployed from its own directory:
+The repo has two bundles. Deploy each one from its own directory:
 
 | Bundle | Owns |
 |---|---|
-| [`lakebase_setup_dab/`](lakebase_setup_dab/README.md) | UC schema + seed jobs, the Lakebase project/branch/endpoint, the `lakebase-owner` role, the `databricks_postgres` database, its UC catalog and the 3 synced tables |
-| [`lakebase_app_dab/`](lakebase_app_dab/README.md) | The Streamlit app and its own `app_db` database (created inside the setup bundle's project) |
+| [`lakebase_setup_dab/`](lakebase_setup_dab/README.md) | Source schema and seed jobs, the Lakebase project, the `production` branch, `databricks_postgres` and the synced tables |
+| [`lakebase_app_dab/`](lakebase_app_dab/README.md) | The app and its `app_db` database; in `dev`, also a per-user branch |
 
-They're kept separate because each has its own first-deploy ordering step
-(see [Workflow](#workflow)); a single `bundle deploy` would combine both.
+They're kept separate because each one has its own first-deploy step (see [Workflow](#workflow)).
 
-## Permissions model
+## Environments
 
-| Who | Where | What | How |
+There's one Lakebase project, and each environment is a **branch** of it:
+
+| App bundle target | Branch | App | Data |
 |---|---|---|---|
-| `lakebase-owner` role | `databricks_postgres`, `app_db` | Database owner | `postgres_roles` / `postgres_databases` — not tied to the deployer's identity |
-| Sync pipeline | `sync_bakehouse.*` | Owns and writes the synced tables | Created by `postgres_synced_tables` |
-| App service principal | `sync_bakehouse.*` | `USAGE` + `SELECT` only | One-time `scripts/grant_app_access.py` |
-| App service principal | `app_db` | `CONNECT` + `CREATE`; owns schema `app` | App resource `CAN_CONNECT_AND_CREATE`; app creates the schema on startup |
-| `group_etl` | Project, UC schema, app | `CAN_USE`, `USE_SCHEMA`+`SELECT`, `CAN_USE` | Showcase grants in the YAML |
+| `prod` | `production` | `bakehouse-lakebase-viewer` | Live synced tables + prod `app_db` |
+| `dev` (default) | `dev-<user>`, created by the bundle | `bakehouse-viewer-<user>` | Copy of production at the time of the fork |
 
-Synced tables are read-only in Postgres anyway (only `SELECT`, `CREATE INDEX`,
-`DROP TABLE`); writing to them would break the sync.
+- **Freshness:** the dev branch is a snapshot. Sync pipelines only write to `production`.
+- **Expiry:** the dev branch expires after 1 day, and the next `deploy -t dev` forks a fresh one.
+- **Setup bundle:** it has only a `prod` target. That's deliberate: there is one Lakebase project, and environments are branches of it.
 
 ## Prerequisites
 
 - Databricks CLI ≥ v0.294.0 and [`uv`](https://docs.astral.sh/uv/).
 - A CLI profile for the workspace. Commands below use `<PROFILE>` as a
-  placeholder — use whatever you named yours (`databricks auth profiles`).
-  Use OAuth; `databricks apps logs` doesn't work with a PAT:
+  placeholder; check yours with `databricks auth profiles`. Use OAuth, because
+  `databricks apps logs` doesn't work with a PAT:
 
   ```bash
   databricks auth login --host https://dbc-ea4bb8e5-6935.cloud.databricks.com --profile <PROFILE>
@@ -62,19 +75,30 @@ databricks bundle deploy --profile <PROFILE>               # synced tables may f
 databricks bundle run seed_source_tables --profile <PROFILE>
 databricks bundle deploy --profile <PROFILE>               # now creates the synced tables
 
-# 2. App (creates app_db and the app's service principal)
+# 2. Prod app (creates app_db and the app's service principal)
 cd ../lakebase_app_dab
-databricks bundle deploy --profile <PROFILE>
-databricks bundle run bakehouse_viewer --profile <PROFILE>
+databricks bundle deploy -t prod --profile <PROFILE>
+databricks bundle run bakehouse_viewer -t prod --profile <PROFILE>
 
-# 3. Let the app's service principal read the synced schema (run from lakebase_setup_dab for its venv)
+# 3. Grant the app read access to the synced tables (run from lakebase_setup_dab for its venv)
 cd ../lakebase_setup_dab
 uv run python ../lakebase_app_dab/scripts/grant_app_access.py \
   --profile <PROFILE> --project-id lakebase-bakehouse-demo --app-name bakehouse-lakebase-viewer
 ```
 
-Open the app via `databricks apps get bakehouse-lakebase-viewer --profile <PROFILE>` (→ `url`).
-Repeat step 3 if the app is ever deleted and recreated — it gets a new service principal.
+Find the app's URL with `databricks apps get <app name> --profile <PROFILE>`.
+Repeat step 3 whenever an app is created or recreated, because it gets a new service principal.
+
+### Dev environment
+
+```bash
+cd lakebase_app_dab
+databricks bundle deploy --profile <PROFILE>               # forks dev-<user>, creates bakehouse-viewer-<user>
+databricks bundle run bakehouse_viewer --profile <PROFILE>
+cd ../lakebase_setup_dab
+uv run python ../lakebase_app_dab/scripts/grant_app_access.py --profile <PROFILE> \
+  --project-id lakebase-bakehouse-demo --app-name bakehouse-viewer-<user> --branch dev-<user>
+```
 
 ### Day to day
 
@@ -84,41 +108,35 @@ databricks bundle run simulate_changes --profile <PROFILE>
 databricks bundle run trigger_lakebase_sync --profile <PROFILE>
 uv run python scripts/check_lakebase.py --profile <PROFILE> --project-id lakebase-bakehouse-demo
 
-# In lakebase_app_dab: ship app changes and check them
+# In lakebase_app_dab: try app changes on dev, then ship to prod
 databricks bundle deploy --profile <PROFILE> && databricks bundle run bakehouse_viewer --profile <PROFILE>
-databricks apps logs bakehouse-lakebase-viewer --profile <PROFILE>
+databricks bundle deploy -t prod --profile <PROFILE> && databricks bundle run bakehouse_viewer -t prod --profile <PROFILE>
+databricks apps logs <app name> --profile <PROFILE>
 ```
 
-Run `databricks bundle plan --profile <PROFILE>` before deploying any change to
-Lakebase resources — see the gotchas below.
+Before deploying a change to Lakebase resources, run `databricks bundle plan`.
+A `delete` or `recreate` of a database, catalog or synced table means losing its data.
 
 ### Cleanup
 
-Destroy the app first; `app_db` lives inside the setup bundle's project.
+Destroy the app bundle first, because `app_db` lives inside the setup bundle's project.
 
 ```bash
-cd lakebase_app_dab   && databricks bundle destroy --profile <PROFILE>
+cd lakebase_app_dab && databricks bundle destroy --profile <PROFILE> && databricks bundle destroy -t prod --profile <PROFILE>
+# If the synced tables fail to delete, remove the leftover "Synced table: lakebase-bakehouse-demo.*" pipelines by hand
 cd ../lakebase_setup_dab && databricks bundle destroy --profile <PROFILE>
 # Projects are soft-deleted for 7 days; to free the id immediately:
 databricks postgres delete-project projects/lakebase-bakehouse-demo --purge --profile <PROFILE>
 ```
 
-## Gotchas
+## Permissions
 
-- **Resource id ≠ Postgres name.** Databases have a hyphenated resource id
-  (`databricks-postgres`, `app-db`, used in API paths) and an underscored
-  Postgres name (`databricks_postgres`, `app_db`, used to connect).
-- **Renaming a Lakebase resource key deletes and recreates it.** For a
-  database that means data loss. Instead: `databricks bundle deployment unbind <old_key>`
-  (with the old key still in the YAML), rename, then deploy — `replace_existing: true`
-  adopts the existing resource.
-- **Don't remove `create_database_if_missing`** from the `postgres_catalogs`
-  resource — changing it recreates the catalog and its synced tables.
-- **Never create the app's `app` schema under your own login** (e.g. running
-  the app locally first). Your role would own it and the app would get
-  `permission denied`.
-- **Only the first database in the app's `resources:` gets `PG*` env vars.**
-  The synced one stays first; `app_db` is selected via `APP_PGDATABASE`.
-- **Reverse sync (Lakebase → Delta) is blocked in this workspace** — it needs
-  a catalog on external storage. See
-  [lakebase_setup_dab/README.md](lakebase_setup_dab/README.md#reverse-sync-lakebase--delta).
+- **Synced tables** (`databricks_postgres.sync_bakehouse`): only the sync pipeline
+  writes to them. Each app gets read access from `grant_app_access.py`.
+- **App data** (`app_db.app`): the prod app creates this schema itself and owns it.
+  A dev app works on a forked copy that still belongs to the prod app, so the
+  grant script also gives it read/write access there.
+- **Databases**: both are owned by the `lakebase-owner` role, which is defined
+  in the setup bundle rather than tied to whoever deployed it.
+- **`group_etl`**: example grants in the YAML (use the project, read the source
+  schema, use the app).

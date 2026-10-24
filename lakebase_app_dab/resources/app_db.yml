@@ -7,3 +7,4 @@ resources:
       postgres_database: app_db
       # Declared in ../lakebase_setup_dab.
       role: projects/${var.lakebase_project_id}/branches/${var.lakebase_branch}/roles/lakebase-owner
+      replace_existing: true # dev: inherited from the forked branch

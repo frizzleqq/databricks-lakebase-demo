@@ -1,14 +1,14 @@
 # lakebase_app_dab
 
-Streamlit Databricks App `bakehouse-lakebase-viewer`:
+Streamlit Databricks App (`bakehouse-lakebase-viewer` in prod, `bakehouse-viewer-<user>` in dev):
 
 - **Synced tables** tab — reads `databricks_postgres.sync_bakehouse.*`, which
   is synced by `../lakebase_setup_dab`.
 - **Comments** tab — writes comments on products or customers to `app_db.app.comments`,
   the app's own database in the same Lakebase project.
 
-Requires `../lakebase_setup_dab` to be deployed and seeded. For the first-deploy
-order (including the one-time grant), see the [root README](../README.md#workflow).
+Requires `../lakebase_setup_dab` to be deployed and seeded. For environments and
+the first-deploy order (including the one-time grant), see the [root README](../README.md#environments).
 
 ## How the app connects
 
@@ -25,11 +25,11 @@ order (including the one-time grant), see the [root README](../README.md#workflo
 ## Layout
 
 ```
-databricks.yml               # variables, dev target
+databricks.yml               # variables; dev target (forked branch + endpoint) and prod target
 resources/
   apps.yml                   # the app + its two database resources
   app_db.yml                 # the app's own database, app_db
-scripts/grant_app_access.py  # one-time SELECT grant on sync_bakehouse for the app's SP
+scripts/grant_app_access.py  # one-time grants for a new app's SP (synced schema; app schema on forks)
 src/app/
   app.py                     # Streamlit UI
   app.yaml                   # run command + env
@@ -38,8 +38,9 @@ src/app/
 
 ## Variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `lakebase_project_id` | `lakebase-bakehouse-demo` | Project from `lakebase_setup_dab` |
-| `lakebase_branch` | `production` | Branch to connect to |
-| `lakebase_database` | `databricks-postgres` | Resource id of the synced database (Postgres name: `databricks_postgres`) |
+| Variable | dev | prod | Description |
+|---|---|---|---|
+| `app_name` | `bakehouse-viewer-<user>` | `bakehouse-lakebase-viewer` | App name (max 30 chars) |
+| `lakebase_project_id` | `lakebase-bakehouse-demo` | same | Project from `lakebase_setup_dab` |
+| `lakebase_branch` | `dev-<user>` | `production` | Branch the app runs against |
+| `lakebase_database` | `databricks-postgres` | same | Resource id of the synced database (Postgres name: `databricks_postgres`) |

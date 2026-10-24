@@ -1,11 +1,14 @@
 # lakebase_app_dab — agent notes
 
 Read the root [AGENTS.md](../AGENTS.md) first. Before touching the app, read
-the `databricks-apps-python` and `databricks-lakebase` skills. The setup,
-workflow and gotchas are in [../README.md](../README.md).
+the `databricks-apps-python` and `databricks-lakebase` skills. The setup and
+workflow are in [../README.md](../README.md).
 
-- The Lakebase project belongs to `../lakebase_setup_dab`. The only Lakebase
-  resource this bundle owns is `app_db`. Don't add projects or synced tables here.
+- The Lakebase project belongs to `../lakebase_setup_dab`. This bundle owns only
+  `app_db`, plus the `dev-<user>` branch and its endpoint in the `dev` target.
+  Don't add projects or synced tables here.
+- There are two targets: `dev` (the default; a forked branch and a per-user app)
+  and `prod` (the `production` branch). Pass `-t prod` explicitly for prod.
 - `resources/apps.yml`: the synced database must stay the **first** resource,
   because `PG*` env vars are only injected for it.
 - `permission denied for schema sync_bakehouse` after a fresh app deploy is

@@ -35,7 +35,7 @@ scripts/
 
 ## Variables
 
-| Variable | dev value | Description |
+| Variable | prod value | Description |
 |---|---|---|
 | `catalog` | `lake_dev` | UC catalog for the Delta sources and pipeline storage |
 | `schema` | `sync_bakehouse` | UC schema and matching Postgres schema |
