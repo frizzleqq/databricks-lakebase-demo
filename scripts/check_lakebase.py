@@ -43,12 +43,12 @@ def main() -> None:
             cur.execute(f"SELECT count(*) FROM {SCHEMA}.{table}")
             print(f"{SCHEMA}.{table}: {cur.fetchone()[0]} rows")
 
-        cur.execute("SELECT to_regclass('public.franchise_notes')")
+        cur.execute("SELECT to_regclass('app.franchise_notes')")
         if cur.fetchone()[0] is not None:
-            cur.execute("SELECT count(*) FROM public.franchise_notes")
-            print(f"public.franchise_notes: {cur.fetchone()[0]} rows")
+            cur.execute("SELECT count(*) FROM app.franchise_notes")
+            print(f"app.franchise_notes: {cur.fetchone()[0]} rows")
         else:
-            print("public.franchise_notes: not created yet (run scripts/setup_reverse_sync_demo.py)")
+            print("app.franchise_notes: not created yet (run scripts/setup_reverse_sync_demo.py)")
 
 
 if __name__ == "__main__":

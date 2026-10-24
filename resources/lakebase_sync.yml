@@ -4,6 +4,9 @@ resources:
       project_id: ${var.lakebase_project_id}
       display_name: "Lakebase Bakehouse Sync Demo (${workspace.current_user.short_name})"
       pg_version: 17
+      custom_tags:
+        - key: project
+          value: lakebase_demo
 
   postgres_branches:
     production_branch:

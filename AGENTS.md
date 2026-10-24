@@ -49,7 +49,7 @@ Key things to know:
   `databricks bundle run seed_source_tables`, then `bundle deploy` again. See
   README.md's "Bootstrap ordering note."
 - The reverse-sync demo (`scripts/setup_reverse_sync_demo.py`,
-  `public.franchise_notes`) deliberately avoids touching the synced tables —
+  `app.franchise_notes`) deliberately avoids touching the synced tables —
   they're read-only in Postgres (SELECT / CREATE INDEX / DROP TABLE only), and
   Lakehouse Sync's `REPLICA IDENTITY FULL` requirement is not something to
   attempt against a sync-managed table.

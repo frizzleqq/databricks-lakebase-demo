@@ -42,7 +42,7 @@ sync sources.
 Reverse direction (Lakebase -> Delta CDC), see [Reverse sync](#reverse-sync-lakebase--delta) below:
 
 ```
-Lakebase (public.franchise_notes, written to directly)  ──(Lakehouse Sync, UI-only)──►  lake_dev.sync_bakehouse.lb_franchise_notes_history
+Lakebase (app.franchise_notes, written to directly)  ──(Lakehouse Sync, UI-only)──►  lake_dev.sync_bakehouse.lb_franchise_notes_history
 ```
 
 ## Project layout
@@ -160,7 +160,7 @@ isn't part of `databricks bundle deploy`.
 It also can't target one of our *synced* tables (`sales_customers`, etc.) — those are
 sync-managed and read-only in Postgres (only `SELECT`, `CREATE INDEX`, `DROP TABLE`
 are allowed there), and Lakehouse Sync requires `ALTER TABLE ... REPLICA IDENTITY FULL`
-on its source. So this demo uses one extra, plain Postgres table — `public.franchise_notes`
+on its source. So this demo uses one extra, plain Postgres table — `app.franchise_notes`
 — written to directly, the way an application would.
 
 **1. Create the table and set up replica identity:**
@@ -172,8 +172,8 @@ uv run python scripts/setup_reverse_sync_demo.py --profile personal --project-id
 **2. Enable Lakehouse Sync from the UI** (one-time, manual):
 
 Catalog Explorer → your Lakebase project → `production` branch → **Lakehouse Sync** tab
-→ **Start Sync** → source database `databricks_postgres` → table `franchise_notes` →
-destination catalog/schema `lake_dev.sync_bakehouse`.
+→ **Start Sync** → source database `databricks_postgres` → schema `app` → table
+`franchise_notes` → destination catalog/schema `lake_dev.sync_bakehouse`.
 
 This creates `lake_dev.sync_bakehouse.lb_franchise_notes_history` in Delta.
 

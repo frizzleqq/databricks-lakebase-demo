@@ -3,6 +3,9 @@ resources:
     seed_source_tables:
       name: delta_to_lakebase_seed_source_tables
 
+      tags:
+        project: lakebase_demo
+
       environments:
         - environment_key: default
           spec:
@@ -22,6 +25,9 @@ resources:
     simulate_changes:
       name: delta_to_lakebase_simulate_changes
 
+      tags:
+        project: lakebase_demo
+
       environments:
         - environment_key: default
           spec:
@@ -40,6 +46,9 @@ resources:
 
     trigger_lakebase_sync:
       name: delta_to_lakebase_trigger_sync
+
+      tags:
+        project: lakebase_demo
 
       environments:
         - environment_key: default

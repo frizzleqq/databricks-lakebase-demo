@@ -54,8 +54,10 @@ def main() -> None:
     )
 
     with conn, conn.cursor() as cur:
+        cur.execute("CREATE SCHEMA IF NOT EXISTS app")
+
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS public.franchise_notes (
+            CREATE TABLE IF NOT EXISTS app.franchise_notes (
                 id SERIAL PRIMARY KEY,
                 franchise_id BIGINT NOT NULL,
                 note TEXT NOT NULL,
@@ -64,18 +66,18 @@ def main() -> None:
         """)
 
         cur.executemany(
-            "INSERT INTO public.franchise_notes (franchise_id, note) VALUES (%s, %s)",
+            "INSERT INTO app.franchise_notes (franchise_id, note) VALUES (%s, %s)",
             SAMPLE_NOTES,
         )
 
         # Required by Lakehouse Sync so it can capture full before/after row
         # images for updates and deletes, not just the primary key.
-        cur.execute("ALTER TABLE public.franchise_notes REPLICA IDENTITY FULL")
+        cur.execute("ALTER TABLE app.franchise_notes REPLICA IDENTITY FULL")
 
         conn.commit()
 
-        cur.execute("SELECT count(*) FROM public.franchise_notes")
-        print(f"public.franchise_notes ready with {cur.fetchone()[0]} rows, REPLICA IDENTITY FULL set.")
+        cur.execute("SELECT count(*) FROM app.franchise_notes")
+        print(f"app.franchise_notes ready with {cur.fetchone()[0]} rows, REPLICA IDENTITY FULL set.")
         print("Next: enable Lakehouse Sync for this table from the workspace UI (see README.md).")
 
 
