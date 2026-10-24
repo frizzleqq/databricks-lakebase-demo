@@ -7,38 +7,30 @@ to a separate database in the same Lakebase project. Sample data comes from
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  src["Delta tables<br/>lake_dev.sync_bakehouse"]
+Data moves in three steps:
 
-  subgraph lakebase["Lakebase project: lakebase-bakehouse-demo"]
-    subgraph production["branch: production"]
-      synced[("databricks_postgres<br/>sync_bakehouse.* (read-only)")]
-      appdb[("app_db<br/>app.comments")]
-    end
-    subgraph dev["branch: dev-&lt;user&gt; (fork, 1-day TTL)"]
-      devdbs[("copies of both databases")]
-    end
-  end
+1. **Delta:** `samples.bakehouse` tables are copied into Unity Catalog under `lake_dev.sync_bakehouse`.
+2. **Lakebase:** synced tables copy those into the Lakebase project `lakebase-bakehouse-demo`,
+   under `databricks_postgres.sync_bakehouse` on the `production` branch. They're read-only in Postgres.
+3. **App:** `bakehouse-lakebase-viewer` reads the synced tables and writes
+   comments to `app_db.app.comments`, a second Postgres database in the same Lakebase project.
 
-  app["App<br/>bakehouse-lakebase-viewer"]
-  devapp["App<br/>bakehouse-viewer-&lt;user&gt;"]
+The repo has two bundles. Deploy each one from its own directory.
 
-  src -- "synced tables" --> synced
-  synced -- read --> app
-  app -- write --> appdb
-  production -. fork .-> dev
-  devdbs <--> devapp
-```
+**[`lakebase_setup_dab/`](lakebase_setup_dab/README.md)** does steps 1 and 2. It
+creates the Delta copies and their jobs, the Lakebase project (`production`
+branch, endpoint, `databricks_postgres`) and the synced tables.
 
-The repo has two bundles. Deploy each one from its own directory:
+**[`lakebase_app_dab/`](lakebase_app_dab/README.md)** deploys the Streamlit app.
+It doesn't create a Lakebase project. It uses the one from the setup bundle,
+referenced by its id:
 
-| Bundle | Owns |
-|---|---|
-| [`lakebase_setup_dab/`](lakebase_setup_dab/README.md) | Source schema and seed jobs, the Lakebase project, the `production` branch, `databricks_postgres` and the synced tables |
-| [`lakebase_app_dab/`](lakebase_app_dab/README.md) | The app and its `app_db` database; in `dev`, also a per-user branch |
+- It adds a second database, `app_db`, to that project, where the app stores comments.
+- The app reads the synced tables from `databricks_postgres` and writes to `app_db`.
+- In `dev`, it also forks a per-user branch of the project (see [Environments](#environments)).
 
-They're kept separate because each one has its own first-deploy step (see [Workflow](#workflow)).
+So the setup bundle has to be deployed first, and the app bundle has to be
+destroyed first.
 
 ## Environments
 
