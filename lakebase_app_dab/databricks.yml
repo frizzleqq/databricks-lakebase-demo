@@ -23,8 +23,6 @@ targets:
   dev:
     mode: development
     default: true
-    workspace:
-      host: https://dbc-ea4bb8e5-6935.cloud.databricks.com
     resources:
       postgres_branches:
         dev_branch:
@@ -47,7 +45,6 @@ targets:
   prod:
     mode: production
     workspace:
-      host: https://dbc-ea4bb8e5-6935.cloud.databricks.com
       root_path: /Workspace/bundle/${bundle.name}/${bundle.target}
     variables:
       app_name: bakehouse-lakebase-viewer

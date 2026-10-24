@@ -20,7 +20,6 @@ targets:
     mode: production
     default: true
     workspace:
-      host: https://dbc-ea4bb8e5-6935.cloud.databricks.com
       root_path: /Workspace/bundle/${bundle.name}/${bundle.target}
     variables:
       catalog: lake_dev

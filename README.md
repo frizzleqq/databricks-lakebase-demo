@@ -7,30 +7,27 @@ to a separate database in the same Lakebase project. Sample data comes from
 
 ## Architecture
 
-Data moves in three steps:
+Data moves in three steps. Steps 2 and 3 both happen in the Lakebase project
+`lakebase-bakehouse-demo`:
 
-1. **Delta:** `samples.bakehouse` tables are copied into Unity Catalog under `lake_dev.sync_bakehouse`.
-2. **Lakebase:** synced tables copy those into the Lakebase project `lakebase-bakehouse-demo`,
-   under `databricks_postgres.sync_bakehouse` on the `production` branch. They're read-only in Postgres.
-3. **App:** `bakehouse-lakebase-viewer` reads the synced tables and writes
-   comments to `app_db.app.comments`, a second Postgres database in the same Lakebase project.
+| Step | Where | What happens | Bundle |
+|---|---|---|---|
+| 1. Delta | Unity Catalog: `lake_dev.sync_bakehouse` | The `seed_source_tables` job copies `samples.bakehouse` here and enables Change Data Feed | setup |
+| 2. Lakebase | Postgres: `databricks_postgres.sync_bakehouse` | Synced tables copy the Delta tables onto the `production` branch, read-only | setup |
+| 3. App | Postgres: `app_db.app.comments` | `bakehouse-lakebase-viewer` reads step 2 and writes comments to its own database | app |
 
-The repo has two bundles. Deploy each one from its own directory.
+The repo has two bundles, listed in deploy order. Deploy each one from its own directory,
+and destroy them in reverse order.
 
-**[`lakebase_setup_dab/`](lakebase_setup_dab/README.md)** does steps 1 and 2. It
-creates the Delta copies and their jobs, the Lakebase project (`production`
-branch, endpoint, `databricks_postgres`) and the synced tables.
-
-**[`lakebase_app_dab/`](lakebase_app_dab/README.md)** deploys the Streamlit app.
-It doesn't create a Lakebase project. It uses the one from the setup bundle,
-referenced by its id:
-
-- It adds a second database, `app_db`, to that project, where the app stores comments.
-- The app reads the synced tables from `databricks_postgres` and writes to `app_db`.
-- In `dev`, it also forks a per-user branch of the project (see [Environments](#environments)).
-
-So the setup bundle has to be deployed first, and the app bundle has to be
-destroyed first.
+1. **[`lakebase_setup_dab/`](lakebase_setup_dab/README.md)** creates the Lakebase
+   project itself (`production` branch, endpoint, `databricks_postgres`), the Delta
+   copies and the synced tables (table steps 1 and 2).
+2. **[`lakebase_app_dab/`](lakebase_app_dab/README.md)** deploys the Streamlit app.
+   It doesn't create a Lakebase project. It uses the one from the setup bundle,
+   referenced by its id:
+   - It adds a second database, `app_db`, to that project, where the app stores comments.
+   - The app reads the synced tables from `databricks_postgres` and writes to `app_db`.
+   - In `dev`, it also forks a per-user branch of the project (see [Environments](#environments)).
 
 ## Environments
 
@@ -48,13 +45,16 @@ There's one Lakebase project, and each environment is a **branch** of it:
 ## Prerequisites
 
 - Databricks CLI ≥ v0.294.0 and [`uv`](https://docs.astral.sh/uv/).
-- A CLI profile for the workspace. Commands below use `<PROFILE>` as a
-  placeholder; check yours with `databricks auth profiles`. Use OAuth, because
+- A CLI profile for your workspace. The bundles don't set a `workspace.host`,
+  so the workspace comes from the profile. Use OAuth, because
   `databricks apps logs` doesn't work with a PAT:
 
   ```bash
-  databricks auth login --host https://dbc-ea4bb8e5-6935.cloud.databricks.com --profile <PROFILE>
+  databricks auth login --host <WORKSPACE_URL> --profile <PROFILE>
   ```
+
+  Commands below pass `--profile <PROFILE>`; check yours with
+  `databricks auth profiles`. If you use the `DEFAULT` profile, you can leave the flag out.
 
 ## Workflow
 
