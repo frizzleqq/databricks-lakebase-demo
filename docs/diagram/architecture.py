@@ -1,8 +1,12 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 """Draws docs/architecture.png.
 
 Writes the diagram as SVG next to this file; render.js turns it into the PNG:
 
-    python3 docs/diagram/architecture.py
+    uv run docs/diagram/architecture.py
     node docs/diagram/render.js   # needs the playwright npm package
 """
 
