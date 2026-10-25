@@ -7,6 +7,8 @@ to a separate database in the same Lakebase project. Sample data comes from
 
 ## Architecture
 
+![Data flow from samples.bakehouse through Unity Catalog and Lakebase to the app, colored by owning bundle](docs/architecture.png)
+
 Data moves in three steps. Steps 2 and 3 both happen in the Lakebase project
 `lakebase-bakehouse-demo`:
 
