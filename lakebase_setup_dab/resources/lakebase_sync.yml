@@ -51,10 +51,12 @@ resources:
       # No-op, but changing it recreates the catalog and synced tables.
       create_database_if_missing: true
 
+  # source_table_full_name reads catalog/schema from the initial_seed job run, so
+  # each synced table is created only after the seed run (see jobs.yml).
   postgres_synced_tables:
     sales_franchises:
       synced_table_id: ${resources.postgres_catalogs.bakehouse_catalog.catalog_id}.${var.schema}.sales_franchises
-      source_table_full_name: ${var.catalog}.${var.schema}.sales_franchises
+      source_table_full_name: ${resources.job_runs.initial_seed.job_parameters.catalog}.${resources.job_runs.initial_seed.job_parameters.schema}.sales_franchises
       branch: projects/${resources.postgres_projects.bakehouse_demo.project_id}/branches/production
       postgres_database: databricks_postgres
       primary_key_columns: [franchiseID]
@@ -66,7 +68,7 @@ resources:
 
     sales_customers:
       synced_table_id: ${resources.postgres_catalogs.bakehouse_catalog.catalog_id}.${var.schema}.sales_customers
-      source_table_full_name: ${var.catalog}.${var.schema}.sales_customers
+      source_table_full_name: ${resources.job_runs.initial_seed.job_parameters.catalog}.${resources.job_runs.initial_seed.job_parameters.schema}.sales_customers
       branch: projects/${resources.postgres_projects.bakehouse_demo.project_id}/branches/production
       postgres_database: databricks_postgres
       primary_key_columns: [customerID]
@@ -78,7 +80,7 @@ resources:
 
     sales_transactions:
       synced_table_id: ${resources.postgres_catalogs.bakehouse_catalog.catalog_id}.${var.schema}.sales_transactions
-      source_table_full_name: ${var.catalog}.${var.schema}.sales_transactions
+      source_table_full_name: ${resources.job_runs.initial_seed.job_parameters.catalog}.${resources.job_runs.initial_seed.job_parameters.schema}.sales_transactions
       branch: projects/${resources.postgres_projects.bakehouse_demo.project_id}/branches/production
       postgres_database: databricks_postgres
       primary_key_columns: [transactionID]

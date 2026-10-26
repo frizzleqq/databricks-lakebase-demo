@@ -14,7 +14,7 @@ Data moves in three steps. Steps 2 and 3 both happen in the Lakebase project
 
 | Step | Where | What happens | Bundle |
 |---|---|---|---|
-| 1. Delta | Unity Catalog: `lake_dev.sync_bakehouse` | The `seed_source_tables` job copies `samples.bakehouse` here and enables Change Data Feed | setup |
+| 1. Delta | Unity Catalog: `lake_dev.sync_bakehouse` | The `seed_source_tables` job, run during the first deploy, copies `samples.bakehouse` here and enables Change Data Feed | setup |
 | 2. Lakebase | Postgres: `databricks_postgres.sync_bakehouse` | Synced tables copy the Delta tables onto the `production` branch, read-only | setup |
 | 3. App | Postgres: `app_db.app.comments` | `bakehouse-lakebase-viewer` reads step 2 and writes comments to its own database | app |
 
@@ -74,9 +74,7 @@ There's one Lakebase project, and each environment is a **branch** of it:
 ```bash
 # 1. Sync infrastructure
 cd lakebase_setup_dab
-databricks bundle deploy               # synced tables may fail: sources don't exist yet
-databricks bundle run seed_source_tables
-databricks bundle deploy               # now creates the synced tables
+databricks bundle deploy               # also runs seed_source_tables before creating the synced tables
 
 # 2. Prod app (creates app_db and the app's service principal)
 cd ../lakebase_app_dab

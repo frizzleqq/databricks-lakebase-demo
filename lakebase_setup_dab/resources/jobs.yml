@@ -1,4 +1,16 @@
 resources:
+  # Runs the seed_source_tables job during `bundle deploy`, so the source tables exist
+  # before the synced tables are created. Deploy waits for the run and fails if
+  # it fails. A successful run isn't repeated, unless these settings change.
+  # Referencing the schema makes the run wait for it, and the synced tables
+  # read their source names from here, so they wait for the run.
+  job_runs:
+    initial_seed:
+      job_id: ${resources.jobs.seed_source_tables.id}
+      job_parameters:
+        catalog: ${resources.schemas.sync_bakehouse.catalog_name}
+        schema: ${resources.schemas.sync_bakehouse.name}
+
   jobs:
     seed_source_tables:
       name: delta_to_lakebase_seed_source_tables
@@ -13,14 +25,18 @@ resources:
             dependencies:
               - databricks-sdk==0.106.0
 
+      # Job-level (not task) parameters, so the initial_seed job run can pass them.
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+
       tasks:
         - task_key: seed_source_tables
           environment_key: default
           notebook_task:
             notebook_path: ../src/notebooks/seed_source_tables.py
-            base_parameters:
-              catalog: ${var.catalog}
-              schema: ${var.schema}
 
     simulate_changes:
       name: delta_to_lakebase_simulate_changes
@@ -65,3 +81,4 @@ resources:
             base_parameters:
               lakebase_catalog: ${var.lakebase_project_id}
               schema: ${var.schema}
+

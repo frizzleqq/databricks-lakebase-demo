@@ -9,6 +9,12 @@ the overall setup, first-deploy order and cleanup, see the [root README](../READ
 The `seed_source_tables` job copies the tables into `lake_dev.sync_bakehouse`
 and enables CDF there; those copies are the sync sources.
 
+`bundle deploy` runs that job itself, through the `initial_seed` job run in
+`resources/jobs.yml`, after creating the schema and before creating the synced
+tables, so a fresh deploy works in one go. The run happens once; later deploys
+skip it unless its parameters change. The seed only creates missing tables, so
+to re-seed a table, drop it and run `databricks bundle run seed_source_tables`.
+
 | Table | Sync mode | Why |
 |---|---|---|
 | `sales_franchises` | `SNAPSHOT` (no CDF) | Small reference table — full copy each run |
@@ -25,7 +31,7 @@ databricks.yml               # variables, dev target
 resources/
   schemas.yml                # UC schema sync_bakehouse
   lakebase_sync.yml          # project, branch, endpoint, owner role, database, catalog, synced tables
-  jobs.yml                   # seed_source_tables, simulate_changes, trigger_lakebase_sync
+  jobs.yml                   # seed_source_tables (+ its initial_seed run), simulate_changes, trigger_lakebase_sync
 src/notebooks/               # the three job notebooks
 scripts/
   check_lakebase.py          # prints row counts straight from Postgres

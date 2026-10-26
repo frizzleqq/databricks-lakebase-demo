@@ -3,6 +3,10 @@
 # schema, so we have Delta tables we're allowed to enable Change Data Feed
 # (CDF) on. ALTER TABLE on samples.bakehouse itself would fail -- it's a
 # system catalog we don't own.
+#
+# Runs during `bundle deploy` (the initial_seed job run), so it is idempotent:
+# existing tables are left alone, keeping simulated changes and the CDF history
+# the TRIGGERED syncs rely on. Drop a table to have it re-seeded.
 
 # COMMAND ----------
 dbutils.widgets.text("catalog", "lake_dev")
@@ -17,7 +21,7 @@ spark.sql(f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}")
 # COMMAND ----------
 # sales_franchises is synced in SNAPSHOT mode -- no CDF needed.
 spark.sql(f"""
-    CREATE OR REPLACE TABLE {catalog}.{schema}.sales_franchises
+    CREATE TABLE IF NOT EXISTS {catalog}.{schema}.sales_franchises
     AS SELECT * FROM samples.bakehouse.sales_franchises
 """)
 
@@ -26,7 +30,7 @@ spark.sql(f"""
 # needs Change Data Feed enabled on the source table.
 for table in ["sales_customers", "sales_transactions"]:
     spark.sql(f"""
-        CREATE OR REPLACE TABLE {catalog}.{schema}.{table}
+        CREATE TABLE IF NOT EXISTS {catalog}.{schema}.{table}
         AS SELECT * FROM samples.bakehouse.{table}
     """)
     spark.sql(f"""
