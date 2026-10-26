@@ -1,25 +1,38 @@
 """Verify the Delta -> Lakebase sync by querying Postgres directly.
 
 Usage:
-    uv run python scripts/check_lakebase.py --profile <PROFILE> --project-id lakebase-bakehouse-<user>
+    uv run python scripts/check_lakebase.py --project-id lakebase-bakehouse-<user>
 """
 
 import argparse
+from pathlib import Path
 
 import psycopg
+import yaml
 from databricks.sdk import WorkspaceClient
 
 SCHEMA = "sync_bakehouse"
 SYNCED_TABLES = ["sales_franchises", "sales_customers", "sales_transactions"]
+LOCAL_CONFIG = Path(__file__).resolve().parents[2] / "databricks.local.yml"
+
+
+def workspace_client(profile: str | None) -> WorkspaceClient:
+    """Use --profile if given, else the workspace from the repo's databricks.local.yml."""
+    if profile:
+        return WorkspaceClient(profile=profile)
+    if not LOCAL_CONFIG.exists():
+        raise SystemExit(f"{LOCAL_CONFIG} not found: copy databricks.local.yml.example, or pass --profile.")
+    workspace = yaml.safe_load(LOCAL_CONFIG.read_text())["workspace"]
+    return WorkspaceClient(host=workspace["host"], profile=workspace.get("profile"))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--profile", required=True, help="Databricks CLI profile")
+    parser.add_argument("--profile", help="Databricks CLI profile (default: ../databricks.local.yml)")
     parser.add_argument("--project-id", required=True, help="Lakebase project id (var.lakebase_project_id)")
     args = parser.parse_args()
 
-    w = WorkspaceClient(profile=args.profile)
+    w = workspace_client(args.profile)
     branch = f"projects/{args.project_id}/branches/production"
     endpoint = f"{branch}/endpoints/primary"
 
@@ -42,13 +55,6 @@ def main() -> None:
         for table in SYNCED_TABLES:
             cur.execute(f"SELECT count(*) FROM {SCHEMA}.{table}")
             print(f"{SCHEMA}.{table}: {cur.fetchone()[0]} rows")
-
-        cur.execute("SELECT to_regclass('app.franchise_notes')")
-        if cur.fetchone()[0] is not None:
-            cur.execute("SELECT count(*) FROM app.franchise_notes")
-            print(f"app.franchise_notes: {cur.fetchone()[0]} rows")
-        else:
-            print("app.franchise_notes: not created yet (run scripts/setup_reverse_sync_demo.py)")
 
 
 if __name__ == "__main__":

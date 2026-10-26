@@ -4,6 +4,8 @@ bundle:
 
 include:
   - resources/*.yml
+  # Your workspace (git-ignored). See ../databricks.local.yml.example.
+  - ../databricks.local.yml
 
 variables:
   catalog:

@@ -21,6 +21,9 @@ the first-deploy order (including the one-time grant), see the [root README](../
 - On first use of the Comments tab, the app creates schema `app` in `app_db`
   and owns it, so it needs no grant there. `sync_bakehouse` belongs to the sync
   pipeline, which is why `scripts/grant_app_access.py` exists.
+- The app also sets `REPLICA IDENTITY FULL` on `app.comments` to prepare it for
+  [reverse sync](#reverse-sync-lakebase--delta-prepared-but-not-enabled). Only
+  the owner (the prod app) can set it, and forked branches inherit the setting.
 
 ## Layout
 
@@ -44,3 +47,37 @@ src/app/
 | `lakebase_project_id` | `lakebase-bakehouse-demo` | same | Project from `lakebase_setup_dab` |
 | `lakebase_branch` | `dev-<user>` | `production` | Branch the app runs against |
 | `lakebase_database` | `databricks-postgres` | same | Resource id of the synced database (Postgres name: `databricks_postgres`) |
+
+## Reverse sync (Lakebase → Delta), prepared but not enabled
+
+Lakehouse Sync streams changes from a Postgres schema into Delta history
+tables (`lb_<table>_history`). The app already sets `REPLICA IDENTITY FULL`
+on `app.comments`. Once a destination is available, turn the sync on with:
+
+```bash
+# PARENT is the database resource path (app-db), not the Postgres name (app_db).
+# The destination catalog and schema must already exist.
+databricks postgres create-cdf-config \
+  projects/lakebase-bakehouse-demo/branches/production/databases/app-db \
+  <destination_catalog> <destination_schema> app \
+  --cdf-config-id app_to_delta
+```
+
+**Blocked in this workspace:** `Lakebase CDF is not supported for catalogs
+using Default Storage`. It needs a catalog on an external storage location,
+and none exists here. The Lakebase docs also say the source tables must be in
+`databricks_postgres`. That hasn't been tested against `app_db` yet, so
+`app.comments` may have to move there.
+
+Once it's running, `<destination_catalog>.<destination_schema>.lb_comments_history`
+holds every change:
+
+```sql
+-- Latest state of each row
+SELECT * FROM (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY id ORDER BY _pg_lsn DESC) AS rn
+  FROM <destination_catalog>.<destination_schema>.lb_comments_history
+  WHERE _pg_change_type IN ('insert', 'update_postimage', 'delete')
+)
+WHERE rn = 1 AND _pg_change_type != 'delete';
+```

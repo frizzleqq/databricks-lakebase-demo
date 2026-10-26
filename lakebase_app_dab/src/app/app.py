@@ -66,6 +66,24 @@ def init_app_db() -> None:
                 )
             """)
         )
+        # Prepares app.comments for Lakehouse Sync (Lakebase -> Delta CDC), which
+        # needs full before/after row images. Only the owner may ALTER; a forked
+        # branch inherits the setting from its source, so skip it there.
+        conn.execute(
+            text("""
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM pg_class
+                        WHERE oid = 'app.comments'::regclass
+                          AND relreplident <> 'f'
+                          AND pg_has_role(relowner, 'USAGE')
+                    ) THEN
+                        ALTER TABLE app.comments REPLICA IDENTITY FULL;
+                    END IF;
+                END $$
+            """)
+        )
 
 
 def load_table(table: str, limit: int) -> tuple[pd.DataFrame, int]:

@@ -31,4 +31,8 @@ workflow are in [README.md](README.md).
 Read the bundle's AGENTS.md before changing anything in it. Deploy each bundle
 from its own directory, and never merge the two.
 
-Don't hardcode a CLI profile name in docs or commands. Use `<PROFILE>`.
+The workspace comes from the git-ignored `databricks.local.yml` at the repo
+root (template: `databricks.local.yml.example`), which both bundles include.
+Run commands from a bundle directory and leave out `--profile`. Never commit
+`databricks.local.yml` or hardcode a host or profile name; in docs, write
+`<PROFILE>` only for `databricks auth login`.

@@ -17,3 +17,7 @@ workflow are in [../README.md](../README.md).
 - Don't run the app locally against `app_db` before it has been deployed and
   opened. Your login would own the `app` schema, and the app's service
   principal would then be locked out.
+- `create-cdf-config` (Lakehouse Sync, see README) is a real CLI command. It's
+  blocked by the missing external storage, which is a platform prerequisite,
+  so don't retry it with other names. Keep `REPLICA IDENTITY FULL` on
+  `app.comments`, because the sync needs it.

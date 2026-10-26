@@ -10,29 +10,42 @@ its venv (databricks-sdk, psycopg), as the Lakebase project owner:
 
     cd ../lakebase_setup_dab
     uv run python ../lakebase_app_dab/scripts/grant_app_access.py \
-        --profile <PROFILE> --project-id lakebase-bakehouse-demo \
+        --project-id lakebase-bakehouse-demo \
         --app-name <APP_NAME> [--branch <BRANCH>]
 """
 
 import argparse
+from pathlib import Path
 
 import psycopg
+import yaml
 from databricks.sdk import WorkspaceClient
 
 SCHEMA = "sync_bakehouse"
 APP_DB = "app_db"
 APP_SCHEMA = "app"
+LOCAL_CONFIG = Path(__file__).resolve().parents[2] / "databricks.local.yml"
+
+
+def workspace_client(profile: str | None) -> WorkspaceClient:
+    """Use --profile if given, else the workspace from the repo's databricks.local.yml."""
+    if profile:
+        return WorkspaceClient(profile=profile)
+    if not LOCAL_CONFIG.exists():
+        raise SystemExit(f"{LOCAL_CONFIG} not found: copy databricks.local.yml.example, or pass --profile.")
+    workspace = yaml.safe_load(LOCAL_CONFIG.read_text())["workspace"]
+    return WorkspaceClient(host=workspace["host"], profile=workspace.get("profile"))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--profile", required=True, help="Databricks CLI profile")
+    parser.add_argument("--profile", help="Databricks CLI profile (default: ../databricks.local.yml)")
     parser.add_argument("--project-id", required=True, help="Lakebase project id owning the synced tables")
     parser.add_argument("--app-name", required=True, help="Deployed app name (resources.apps.<key>.name)")
     parser.add_argument("--branch", default="production")
     args = parser.parse_args()
 
-    w = WorkspaceClient(profile=args.profile)
+    w = workspace_client(args.profile)
 
     app = w.apps.get(name=args.app_name)
     client_id = app.service_principal_client_id

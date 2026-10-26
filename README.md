@@ -47,16 +47,25 @@ There's one Lakebase project, and each environment is a **branch** of it:
 ## Prerequisites
 
 - Databricks CLI ≥ v0.294.0 and [`uv`](https://docs.astral.sh/uv/).
-- A CLI profile for your workspace. The bundles don't set a `workspace.host`,
-  so the workspace comes from the profile. Use OAuth, because
-  `databricks apps logs` doesn't work with a PAT:
+- A CLI login to your workspace. Use OAuth, because `databricks apps logs`
+  doesn't work with a PAT:
 
   ```bash
   databricks auth login --host <WORKSPACE_URL> --profile <PROFILE>
   ```
 
-  Commands below pass `--profile <PROFILE>`; check yours with
-  `databricks auth profiles`. If you use the `DEFAULT` profile, you can leave the flag out.
+- A `databricks.local.yml` at the repo root with your workspace URL. It's
+  git-ignored, and both bundles include it:
+
+  ```bash
+  cp databricks.local.yml.example databricks.local.yml   # then set workspace.host
+  ```
+
+  The CLI picks the profile whose host matches, so commands below need no
+  `--profile`. That also holds for non-bundle commands such as `databricks apps`
+  or `databricks psql`, as long as you run them inside a bundle directory. The
+  scripts read the same file. If several profiles share the host, also set
+  `workspace.profile` there.
 
 ## Workflow
 
@@ -65,32 +74,32 @@ There's one Lakebase project, and each environment is a **branch** of it:
 ```bash
 # 1. Sync infrastructure
 cd lakebase_setup_dab
-databricks bundle deploy --profile <PROFILE>               # synced tables may fail: sources don't exist yet
-databricks bundle run seed_source_tables --profile <PROFILE>
-databricks bundle deploy --profile <PROFILE>               # now creates the synced tables
+databricks bundle deploy               # synced tables may fail: sources don't exist yet
+databricks bundle run seed_source_tables
+databricks bundle deploy               # now creates the synced tables
 
 # 2. Prod app (creates app_db and the app's service principal)
 cd ../lakebase_app_dab
-databricks bundle deploy -t prod --profile <PROFILE>
-databricks bundle run bakehouse_viewer -t prod --profile <PROFILE>
+databricks bundle deploy -t prod
+databricks bundle run bakehouse_viewer -t prod
 
 # 3. Grant the app read access to the synced tables (run from lakebase_setup_dab for its venv)
 cd ../lakebase_setup_dab
 uv run python ../lakebase_app_dab/scripts/grant_app_access.py \
-  --profile <PROFILE> --project-id lakebase-bakehouse-demo --app-name bakehouse-lakebase-viewer
+  --project-id lakebase-bakehouse-demo --app-name bakehouse-lakebase-viewer
 ```
 
-Find the app's URL with `databricks apps get <app name> --profile <PROFILE>`.
+Find the app's URL with `databricks apps get <app name>`, run from either bundle directory.
 Repeat step 3 whenever an app is created or recreated, because it gets a new service principal.
 
 ### Dev environment
 
 ```bash
 cd lakebase_app_dab
-databricks bundle deploy --profile <PROFILE>               # forks dev-<user>, creates bakehouse-viewer-<user>
-databricks bundle run bakehouse_viewer --profile <PROFILE>
+databricks bundle deploy               # forks dev-<user>, creates bakehouse-viewer-<user>
+databricks bundle run bakehouse_viewer
 cd ../lakebase_setup_dab
-uv run python ../lakebase_app_dab/scripts/grant_app_access.py --profile <PROFILE> \
+uv run python ../lakebase_app_dab/scripts/grant_app_access.py \
   --project-id lakebase-bakehouse-demo --app-name bakehouse-viewer-<user> --branch dev-<user>
 ```
 
@@ -98,14 +107,14 @@ uv run python ../lakebase_app_dab/scripts/grant_app_access.py --profile <PROFILE
 
 ```bash
 # In lakebase_setup_dab: change source rows, then push them to Lakebase
-databricks bundle run simulate_changes --profile <PROFILE>
-databricks bundle run trigger_lakebase_sync --profile <PROFILE>
-uv run python scripts/check_lakebase.py --profile <PROFILE> --project-id lakebase-bakehouse-demo
+databricks bundle run simulate_changes
+databricks bundle run trigger_lakebase_sync
+uv run python scripts/check_lakebase.py --project-id lakebase-bakehouse-demo
 
 # In lakebase_app_dab: try app changes on dev, then ship to prod
-databricks bundle deploy --profile <PROFILE> && databricks bundle run bakehouse_viewer --profile <PROFILE>
-databricks bundle deploy -t prod --profile <PROFILE> && databricks bundle run bakehouse_viewer -t prod --profile <PROFILE>
-databricks apps logs <app name> --profile <PROFILE>
+databricks bundle deploy && databricks bundle run bakehouse_viewer
+databricks bundle deploy -t prod && databricks bundle run bakehouse_viewer -t prod
+databricks apps logs <app name>
 ```
 
 Before deploying a change to Lakebase resources, run `databricks bundle plan`.
@@ -116,11 +125,11 @@ A `delete` or `recreate` of a database, catalog or synced table means losing its
 Destroy the app bundle first, because `app_db` lives inside the setup bundle's project.
 
 ```bash
-cd lakebase_app_dab && databricks bundle destroy --profile <PROFILE> && databricks bundle destroy -t prod --profile <PROFILE>
+cd lakebase_app_dab && databricks bundle destroy && databricks bundle destroy -t prod
 # If the synced tables fail to delete, remove the leftover "Synced table: lakebase-bakehouse-demo.*" pipelines by hand
-cd ../lakebase_setup_dab && databricks bundle destroy --profile <PROFILE>
+cd ../lakebase_setup_dab && databricks bundle destroy
 # Projects are soft-deleted for 7 days; to free the id immediately:
-databricks postgres delete-project projects/lakebase-bakehouse-demo --purge --profile <PROFILE>
+databricks postgres delete-project projects/lakebase-bakehouse-demo --purge
 ```
 
 ## Permissions

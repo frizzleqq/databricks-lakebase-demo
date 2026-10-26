@@ -1,0 +1,7 @@
+# Copy to databricks.local.yml and set your workspace URL. Both bundles include
+# it, and the scripts read it, so no command needs --profile.
+# databricks.local.yml is git-ignored, so your workspace never ends up in the repo.
+workspace:
+  host: https://<your-workspace>.cloud.databricks.com
+  # Only needed if several profiles in ~/.databrickscfg point at this host:
+  # profile: <PROFILE>

@@ -10,10 +10,12 @@ dependencies = [
     # LIMITATION: for pipelines, dependencies are cached during development;
     # add dependencies to the 'environment' section of your pipeline.yml file instead
     #
-    # Used by scripts/check_lakebase.py and scripts/setup_reverse_sync_demo.py
-    # to connect to Lakebase Postgres directly from a local machine.
+    # Used by scripts/check_lakebase.py and
+    # ../lakebase_app_dab/scripts/grant_app_access.py to connect to Lakebase
+    # Postgres directly from a local machine (pyyaml reads ../databricks.local.yml).
     "databricks-sdk>=0.106.0",
     "psycopg[binary]>=3.1",
+    "pyyaml>=6.0.3",
 ]
 
 [dependency-groups]

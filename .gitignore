@@ -11,3 +11,6 @@ scratch/**
 
 
 .claude/
+
+# Local workspace config, see databricks.local.yml.example
+databricks.local.yml

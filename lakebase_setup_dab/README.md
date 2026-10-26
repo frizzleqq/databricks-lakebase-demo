@@ -1,8 +1,7 @@
 # lakebase_setup_dab
 
-Syncs three `samples.bakehouse` tables from Delta into Lakebase Postgres, and
-sketches the reverse direction (Lakebase → Delta CDC). For the overall setup,
-first-deploy order and cleanup, see the [root README](../README.md).
+Syncs three `samples.bakehouse` tables from Delta into Lakebase Postgres. For
+the overall setup, first-deploy order and cleanup, see the [root README](../README.md).
 
 ## Data flow
 
@@ -30,7 +29,6 @@ resources/
 src/notebooks/               # the three job notebooks
 scripts/
   check_lakebase.py          # prints row counts straight from Postgres
-  setup_reverse_sync_demo.py # creates app.franchise_notes for the reverse demo
 ```
 
 ## Variables
@@ -44,37 +42,8 @@ scripts/
 ## Querying Postgres directly
 
 ```bash
-uv run python scripts/check_lakebase.py --profile <PROFILE> --project-id lakebase-bakehouse-demo
+uv run python scripts/check_lakebase.py --project-id lakebase-bakehouse-demo
 # or, with psql installed:
-databricks psql --project lakebase-bakehouse-demo --profile <PROFILE>
+databricks psql --project lakebase-bakehouse-demo
 ```
 
-## Reverse sync (Lakebase → Delta)
-
-`databricks postgres create-cdf-config` streams changes from Postgres tables
-into a Delta history table. It can't target synced tables, so the demo uses a
-plain table, `app.franchise_notes`, which must live in `databricks_postgres`.
-
-```bash
-uv run python scripts/setup_reverse_sync_demo.py --profile <PROFILE> --project-id lakebase-bakehouse-demo
-
-databricks postgres create-cdf-config \
-  projects/lakebase-bakehouse-demo/branches/production/databases/databricks-postgres \
-  <destination_catalog> <destination_schema> app \
-  --cdf-config-id app_to_delta --profile <PROFILE>
-```
-
-**Blocked in this workspace:** `Lakebase CDF is not supported for catalogs
-using Default Storage`. It needs a catalog on an external storage location,
-and none exists here. Once set up, it creates
-`<destination_catalog>.<destination_schema>.lb_franchise_notes_history`:
-
-```sql
--- Latest state of each row
-SELECT * FROM (
-  SELECT *, ROW_NUMBER() OVER (PARTITION BY id ORDER BY _pg_lsn DESC) AS rn
-  FROM <destination_catalog>.<destination_schema>.lb_franchise_notes_history
-  WHERE _pg_change_type IN ('insert', 'update_postimage', 'delete')
-)
-WHERE rn = 1 AND _pg_change_type != 'delete';
-```

@@ -13,7 +13,4 @@ setup and workflow are in [../README.md](../README.md).
   (`databricks-postgres`) and also references the `lakebase-owner` role.
 - Always run `bundle plan` before deploying Lakebase changes. Any `delete` or
   `recreate` of a database, catalog or synced table means data loss.
-- Synced tables are read-only in Postgres. Keep the reverse-sync demo on its own
-  table (`app.franchise_notes`).
-- `create-cdf-config` is a real CLI command. It's blocked by the missing external
-  storage, which is a platform prerequisite, so don't retry it with other names.
+- Synced tables are read-only in Postgres.

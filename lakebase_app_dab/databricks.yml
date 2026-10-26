@@ -17,6 +17,8 @@ variables:
 
 include:
   - resources/*.yml
+  # Your workspace (git-ignored). See ../databricks.local.yml.example.
+  - ../databricks.local.yml
 
 targets:
   # Per-developer branch forked from production: copies of the synced tables and prod's app_db.
