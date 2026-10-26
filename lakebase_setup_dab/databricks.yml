@@ -10,6 +10,7 @@ include:
 variables:
   catalog:
     description: The UC catalog holding the Delta source tables (copied from samples.bakehouse)
+    default: lake_dev # override in ../databricks.local.yml
   schema:
     description: The UC schema (and matching Postgres schema) holding the synced tables
   lakebase_project_id:
@@ -24,6 +25,5 @@ targets:
     workspace:
       root_path: /Workspace/bundle/${bundle.name}/${bundle.target}
     variables:
-      catalog: lake_dev
       schema: sync_bakehouse
       lakebase_project_id: lakebase-bakehouse-demo

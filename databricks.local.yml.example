@@ -5,3 +5,8 @@ workspace:
   host: https://<your-workspace>.cloud.databricks.com
   # Only needed if several profiles in ~/.databrickscfg point at this host:
   # profile: <PROFILE>
+
+# Optional: UC catalog for the setup bundle's Delta sources (default: lake_dev).
+# variables:
+#   catalog:
+#     default: <your_catalog>

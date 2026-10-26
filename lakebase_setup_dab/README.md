@@ -41,7 +41,7 @@ scripts/
 
 | Variable | prod value | Description |
 |---|---|---|
-| `catalog` | `lake_dev` | UC catalog for the Delta sources and pipeline storage |
+| `catalog` | `lake_dev` | UC catalog for the Delta sources and pipeline storage. Override it in `../databricks.local.yml` |
 | `schema` | `sync_bakehouse` | UC schema and matching Postgres schema |
 | `lakebase_project_id` | `lakebase-bakehouse-demo` | Lakebase project id, also the UC catalog name |
 
