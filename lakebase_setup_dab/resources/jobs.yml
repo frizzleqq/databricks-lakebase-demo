@@ -60,25 +60,21 @@ resources:
               catalog: ${var.catalog}
               schema: ${var.schema}
 
+    # Starts each synced table's managed pipeline. Lakebase creates those
+    # pipelines, so their ids come from the synced tables' deployed state.
     trigger_lakebase_sync:
       name: delta_to_lakebase_trigger_sync
 
       tags:
         project: lakebase_demo
 
-      environments:
-        - environment_key: default
-          spec:
-            environment_version: "4"
-            dependencies:
-              - databricks-sdk==0.106.0
-
       tasks:
-        - task_key: trigger_sync
-          environment_key: default
-          notebook_task:
-            notebook_path: ../src/notebooks/trigger_lakebase_sync.py
-            base_parameters:
-              lakebase_catalog: ${var.lakebase_project_id}
-              schema: ${var.schema}
-
+        - task_key: sync_sales_franchises
+          pipeline_task:
+            pipeline_id: ${resources.postgres_synced_tables.sales_franchises.status.pipeline_id}
+        - task_key: sync_sales_customers
+          pipeline_task:
+            pipeline_id: ${resources.postgres_synced_tables.sales_customers.status.pipeline_id}
+        - task_key: sync_sales_transactions
+          pipeline_task:
+            pipeline_id: ${resources.postgres_synced_tables.sales_transactions.status.pipeline_id}

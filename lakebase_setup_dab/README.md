@@ -32,7 +32,7 @@ resources/
   schemas.yml                # UC schema sync_bakehouse
   lakebase_sync.yml          # project, branch, endpoint, owner role, database, catalog, synced tables
   jobs.yml                   # seed_source_tables (+ its initial_seed run), simulate_changes, trigger_lakebase_sync
-src/notebooks/               # the three job notebooks
+src/notebooks/               # the seed and simulate_changes notebooks
 scripts/
   check_lakebase.py          # prints row counts straight from Postgres
 ```
