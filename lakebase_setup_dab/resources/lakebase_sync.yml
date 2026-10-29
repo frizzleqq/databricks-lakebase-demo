@@ -2,7 +2,7 @@ resources:
   postgres_projects:
     bakehouse_demo:
       project_id: ${var.lakebase_project_id}
-      display_name: "Lakebase Bakehouse Sync Demo (${workspace.current_user.short_name})"
+      display_name: "Lakebase Bakehouse Sync Demo"
       pg_version: 17
       custom_tags:
         - key: project
