@@ -141,3 +141,34 @@ databricks postgres delete-project projects/lakebase-bakehouse-demo --purge
   in the setup bundle rather than tied to whoever deployed it.
 - **`group_etl`**: example grants in the YAML (use the project, read the source
   schema, use the app).
+
+## Row-level security
+
+UC row filters don't carry over to Lakebase, and Postgres RLS can't go on a synced table.
+
+- **UC row filter on the source:** creating a synced table fails with
+  `cannot have both row/column security and online materialized views`.
+  Adding the filter afterwards doesn't block incremental syncs, but Postgres
+  keeps every row unfiltered and no policy is created. The next full refresh
+  then fails with `ROW_LEVEL_SECURITY_FEATURE_NOT_SUPPORTED.TIME_TRAVEL`.
+- **Postgres RLS on the synced table:** `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`
+  fails with `must be owner`. The sync pipeline's `databricks_writer_*` role
+  owns the table, and `databricks_superuser` isn't a member of it
+  ([documented](https://docs.databricks.com/aws/en/oltp/projects/sync-tables#ownership-and-permissions)).
+- **What works:** a `security_barrier` view in a schema you own that filters the
+  synced table by `current_user` against a mapping table. Grant readers the view
+  only, never `sync_bakehouse`. The view survived both a triggered sync and a
+  full refresh:
+
+  ```sql
+  CREATE TABLE secure.country_access (role_name text, country text, PRIMARY KEY (role_name, country));
+  CREATE VIEW secure.franchises WITH (security_barrier) AS
+    SELECT f.* FROM sync_bakehouse.sales_franchises f
+    WHERE EXISTS (SELECT 1 FROM secure.country_access a
+                  WHERE a.role_name = current_user AND a.country = f.country);
+  GRANT USAGE ON SCHEMA secure TO <role>;
+  GRANT SELECT ON secure.franchises TO <role>;
+  ```
+
+  The view's owner needs SELECT on the synced table. The access rules live in
+  Postgres, so they're maintained separately from UC.
